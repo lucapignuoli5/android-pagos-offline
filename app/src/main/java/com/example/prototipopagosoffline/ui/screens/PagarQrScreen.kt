@@ -358,6 +358,7 @@ private fun sendPayment(
                 
                 val db = AppDatabase.getInstance(context)
                 db.transactionDao().insertTransaction(transaction)
+                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                 
                 socket.close()
             } catch (e: ConnectException) {

@@ -58,24 +58,29 @@ fun PosScreen(
                 readResult = result
                 
                 // Parse and persist if it's a valid JSON response
-                if (result.startsWith("JSON:")) {
+                if (result.startsWith("NFC_PAYLOAD:")) {
                     try {
-                        val jsonContent = result.substringAfter("JSON:\n").substringBefore("\n\nFirma:")
-                        val signature = result.substringAfter("Firma:\n")
-                        
-                        val txJson = Gson().fromJson(jsonContent, Map::class.java)
-                        val monto = (txJson["monto"] as? Number)?.toLong() ?: 0L
-                        val id = txJson["id_transaccion"] as? String ?: "NFC-${System.currentTimeMillis()}"
-                        
+                        val data = result.substringAfter("NFC_PAYLOAD:")
+                        val parts = data.split("|")
+                        val txId = parts[0]
+                        val amountStr = parts[1]
+                        val timestamp = parts[2]
+                        val signature = parts[3].replace("\n", "").trim() // Filtro de seguridad extra
+                        val rawPubKey = parts[4].replace("\n", "").trim()
+
+                        // RECONSTRUCCIÓN PERFECTA PARA PYTHON (Chunks de 64 caracteres)
+                        val chunkedPubKey = rawPubKey.chunked(64).joinToString("\n")
+                        val publicKey = "-----BEGIN PUBLIC KEY-----\n$chunkedPubKey\n-----END PUBLIC KEY-----\n"
+
                         val transaction = TransactionHistory(
-                            idTransaccion = id,
-                            monto = monto,
-                            timestamp = (System.currentTimeMillis() / 1000).toString(),
+                            idTransaccion = txId,
+                            monto = amountStr.toDouble().toLong(),
+                            timestamp = timestamp,
                             comercioId = 1,
-                            tokenId = "TOKEN-NFC-CLIENT",
+                            tokenId = "TOKEN-USER-QR", // Estandarizado con el QR
                             firma = signature,
-                            payloadOriginal = jsonContent,
-                            clavePublica = "PUBLIC_KEY_PLACEHOLDER", // In a real app, this would be in the JSON or resolved
+                            payloadOriginal = "$txId|$amountStr|$timestamp",
+                            clavePublica = publicKey,
                             isOutgoing = false,
                             estadoSincronizacion = SyncState.PENDING
                         )
@@ -83,13 +88,13 @@ fun PosScreen(
                         lastTransaction = transaction
                         PaymentState.addTransaction(transaction)
                         
-                        // Persist to DB
                         scope.launch(Dispatchers.IO) {
                             val db = AppDatabase.getInstance(context)
                             db.transactionDao().insertTransaction(transaction)
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error persistiendo pago NFC", e)
+                        android.util.Log.e("NFC", "Error", e)
                     }
                 }
             }
@@ -172,22 +177,12 @@ private fun readPaymentContractFromTag(tag: Tag): String {
                 return "Respuesta APDU no exitosa: $statusWord"
             }
 
-            val payload = response.copyOfRange(0, response.size - STATUS_SUCCESS.size)
-                .toString(Charsets.UTF_8)
-            val separatorIndex = payload.indexOf('\n')
-
-            if (separatorIndex == -1) {
-                return "Respuesta invalida: no se encontro separador entre JSON y firma."
+            val payload = response.copyOfRange(0, response.size - STATUS_SUCCESS.size).toString(Charsets.UTF_8)
+            val parts = payload.split("|")
+            if (parts.size >= 5) {
+                return "NFC_PAYLOAD:$payload"
             }
-
-            val json = payload.substring(0, separatorIndex)
-            val signature = payload.substring(separatorIndex + 1)
-
-            Log.i(TAG, "Pago recibido exitosamente")
-            Log.d(TAG, "Contrato JSON recibido: $json")
-            Log.d(TAG, "Firma recibida: $signature")
-
-            "JSON:\n$json\n\nFirma:\n$signature"
+            return "Respuesta inválida: Faltan datos en el Micro-Payload."
         }
     } catch (exception: TagLostException) {
         Log.d(TAG, "Se perdio el tag NFC durante la lectura.", exception)

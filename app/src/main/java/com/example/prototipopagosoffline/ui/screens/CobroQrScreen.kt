@@ -120,6 +120,7 @@ fun CobroQrScreen(
                             // Persist to DB
                             val db = AppDatabase.getInstance(context)
                             db.transactionDao().insertTransaction(transaction)
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
 
                         } catch (e: Exception) {
                             Log.e("TCP_SERVER", "Error al procesar JSON", e)

@@ -249,100 +249,111 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Action Buttons
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            ActionButton(
-                icon = Icons.Default.Nfc,
-                label = "Pagar NFC",
-                onClick = onClientClick
-            )
-            ActionButton(
-                icon = Icons.Default.Refresh,
-                label = "Cargar",
-                onClick = { Toast.makeText(context, "Próximamente", Toast.LENGTH_SHORT).show() }
-            )
-            ActionButton(
-                icon = Icons.Default.Sync,
-                label = "Sincronizar",
-                onClick = {
-                    Toast.makeText(context, "Iniciando sincronización...", Toast.LENGTH_SHORT).show()
-                    scope.launch {
-                        try {
-                            val db = AppDatabase.getInstance(context)
-                            val pendingTransactions = withContext(Dispatchers.IO) {
-                                db.transactionDao().getTransactionsBySyncState(SyncState.PENDING)
-                            }
-
-                            if (pendingTransactions.isEmpty()) {
-                                Toast.makeText(context, "No hay transacciones pendientes", Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-
-                            val syncItems = pendingTransactions.map { transaction ->
-                                SyncItem(
-                                    id_transaccion = transaction.idTransaccion,
-                                    monto = transaction.monto.toInt(),
-                                    timestamp = transaction.timestamp,
-                                    comercio_id = transaction.comercioId,
-                                    token_id = transaction.tokenId,
-                                    firma = transaction.firma,
-                                    payload_original = transaction.payloadOriginal,
-                                    clave_publica = transaction.clavePublica
-                                )
-                            }
-
-                            val jsonPayload = Gson().toJson(syncItems)
-                            Log.d("SYNC_DEBUG", "Enviando a backend. Payload: $jsonPayload")
-
-                            val response = withContext(Dispatchers.IO) {
-                                RetrofitClient.apiService.syncPayments(syncItems)
-                            }
-
-                            if (response.isSuccessful) {
-                                Log.d("SYNC_DEBUG", "Respuesta exitosa: ${response.code()}")
-                                withContext(Dispatchers.IO) {
-                                    val syncedIds = pendingTransactions.map { it.idTransaccion }
-                                    db.transactionDao().updateSyncState(syncedIds, SyncState.SYNCED)
-                                    
-                                    // Update PaymentState to reflect sync status if needed
-                                    // (PaymentState currently doesn't track sync status in UI, 
-                                    // but we can refresh the list from DB to be sure)
-                                    val updatedTransactions = db.transactionDao().getAllTransactions().take(10)
-                                    withContext(Dispatchers.Main) {
-                                        PaymentState.recentTransactions.clear()
-                                        PaymentState.recentTransactions.addAll(updatedTransactions)
-                                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ActionButton(
+                    icon = Icons.Default.Nfc,
+                    label = "Pagar NFC",
+                    onClick = onClientClick
+                )
+                ActionButton(
+                    icon = Icons.Default.Refresh,
+                    label = "Cargar",
+                    onClick = { Toast.makeText(context, "Próximamente", Toast.LENGTH_SHORT).show() }
+                )
+                ActionButton(
+                    icon = Icons.Default.Sync,
+                    label = "Sincronizar",
+                    onClick = {
+                        Toast.makeText(context, "Iniciando sincronización...", Toast.LENGTH_SHORT).show()
+                        scope.launch {
+                            try {
+                                val db = AppDatabase.getInstance(context)
+                                val pendingTransactions = withContext(Dispatchers.IO) {
+                                    db.transactionDao().getTransactionsBySyncState(SyncState.PENDING)
                                 }
-                                Toast.makeText(context, "✅ Sincronización exitosa", Toast.LENGTH_SHORT).show()
-                            } else {
-                                val errorBody = response.errorBody()?.string() ?: "Sin cuerpo de error"
-                                Log.e("SYNC_ERROR", "Error HTTP ${response.code()}: $errorBody")
-                                Toast.makeText(context, "❌ Error ${response.code()}: $errorBody", Toast.LENGTH_LONG).show()
+
+                                if (pendingTransactions.isEmpty()) {
+                                    Toast.makeText(context, "No hay transacciones pendientes", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+
+                                val syncItems = pendingTransactions.map { transaction ->
+                                    SyncItem(
+                                        id_transaccion = transaction.idTransaccion,
+                                        monto = transaction.monto.toInt(),
+                                        timestamp = transaction.timestamp,
+                                        comercio_id = transaction.comercioId,
+                                        token_id = transaction.tokenId,
+                                        firma = transaction.firma,
+                                        payload_original = transaction.payloadOriginal,
+                                        clave_publica = transaction.clavePublica
+                                    )
+                                }
+
+                                val jsonPayload = Gson().toJson(syncItems)
+                                Log.d("SYNC_DEBUG", "Enviando a backend. Payload: $jsonPayload")
+
+                                val response = withContext(Dispatchers.IO) {
+                                    RetrofitClient.apiService.syncPayments(syncItems)
+                                }
+
+                                if (response.isSuccessful) {
+                                    Log.d("SYNC_DEBUG", "Respuesta exitosa: ${response.code()}")
+                                    withContext(Dispatchers.IO) {
+                                        val syncedIds = pendingTransactions.map { it.idTransaccion }
+                                        db.transactionDao().updateSyncState(syncedIds, SyncState.SYNCED)
+                                        
+                                        // Update PaymentState to reflect sync status if needed
+                                        // (PaymentState currently doesn't track sync status in UI, 
+                                        // but we can refresh the list from DB to be sure)
+                                        val updatedTransactions = db.transactionDao().getAllTransactions().take(10)
+                                        withContext(Dispatchers.Main) {
+                                            PaymentState.recentTransactions.clear()
+                                            PaymentState.recentTransactions.addAll(updatedTransactions)
+                                        }
+                                    }
+                                    Toast.makeText(context, "✅ Sincronización exitosa", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val errorBody = response.errorBody()?.string() ?: "Sin cuerpo de error"
+                                    Log.e("SYNC_ERROR", "Error HTTP ${response.code()}: $errorBody")
+                                    Toast.makeText(context, "❌ Error ${response.code()}: $errorBody", Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e("SYNC_ERROR", "Excepción durante la sincronización", e)
+                                Toast.makeText(context, "❌ Error de red: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                             }
-                        } catch (e: Exception) {
-                            Log.e("SYNC_ERROR", "Excepción durante la sincronización", e)
-                            Toast.makeText(context, "❌ Error de red: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                         }
                     }
-                }
-            )
-            ActionButton(
-                icon = Icons.Default.ArrowUpward,
-                label = "Cobrar",
-                onClick = onPosClick
-            )
-            ActionButton(
-                icon = Icons.Default.QrCode,
-                label = "Cobro QR",
-                onClick = onCobroQrClick
-            )
-            ActionButton(
-                icon = Icons.Default.QrCodeScanner,
-                label = "Pagar QR",
-                onClick = onPagarQrClick
-            )
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ActionButton(
+                    icon = Icons.Default.ArrowUpward,
+                    label = "Cobrar",
+                    onClick = onPosClick
+                )
+                ActionButton(
+                    icon = Icons.Default.QrCode,
+                    label = "Cobro QR",
+                    onClick = onCobroQrClick
+                )
+                ActionButton(
+                    icon = Icons.Default.QrCodeScanner,
+                    label = "Pagar QR",
+                    onClick = onPagarQrClick
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -446,8 +457,22 @@ fun ClientScreen(
     onPagoQrClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var amount by remember { mutableStateOf("") }
     var isReadyToPay by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(isReadyToPay) {
+        if (isReadyToPay) {
+            // Mientras el HCE no lo ponga en 0, esperamos
+            while (PaymentState.currentPaymentAmount > 0L) {
+                kotlinx.coroutines.delay(500)
+            }
+            // Si sale del loop, el pago fue exitoso
+            isReadyToPay = false
+            Toast.makeText(context, "✅ ¡Pago NFC enviado!", Toast.LENGTH_LONG).show()
+            onBack() // Vuelve al menú principal
+        }
+    }
 
     Column(
         modifier = modifier
