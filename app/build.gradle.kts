@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.zxing.android)
     implementation(libs.androidx.biometric)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
