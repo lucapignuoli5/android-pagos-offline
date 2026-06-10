@@ -128,7 +128,7 @@ fun PosScreen(
     ) {
         if (lastTransaction != null) {
             Text(
-                text = "¡Cobro exitoso de $${lastTransaction!!.monto}!",
+                text = "¡Cobro exitoso de $${String.format(java.util.Locale.US, "%.2f", lastTransaction!!.monto / 100.0)}!",
                 style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold

@@ -568,7 +568,7 @@ fun ActivityItem(transaction: TransactionHistory) {
             )
         }
         Text(
-            text = "${if (transaction.isOutgoing) "-" else "+"}$${transaction.monto}",
+            text = "${if (transaction.isOutgoing) "-" else "+"}$${String.format(java.util.Locale.US, "%.2f", transaction.monto / 100.0)}",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Bold,
             color = if (transaction.isOutgoing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
@@ -634,9 +634,10 @@ fun ClientScreen(
 
             Button(
                 onClick = {
-                    val amountLong = amount.toLongOrNull() ?: 0L
-                    if (amountLong > 0) {
-                        PaymentState.currentPaymentAmount = amountLong
+                    val montoDoble = amount.toDoubleOrNull() ?: 0.0
+                    val montoEnCentavos = (montoDoble * 100).toLong()
+                    if (montoEnCentavos > 0) {
+                        PaymentState.currentPaymentAmount = montoEnCentavos
                         isReadyToPay = true
                     }
                 },
@@ -644,7 +645,7 @@ fun ClientScreen(
                     .fillMaxWidth()
                     .height(64.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = amount.isNotEmpty() && amount.toLong() > 0
+                enabled = amount.isNotEmpty() && (amount.toDoubleOrNull() ?: 0.0) > 0
             ) {
                 Text("Listo para pagar", fontSize = 18.sp)
             }
