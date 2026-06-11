@@ -62,39 +62,51 @@ fun PosScreen(
                     try {
                         val data = result.substringAfter("NFC_PAYLOAD:")
                         val parts = data.split("|")
-                        val txId = parts[0]
-                        val amountStr = parts[1]
-                        val timestamp = parts[2]
-                        val signature = parts[3].replace("\n", "").trim() // Filtro de seguridad extra
-                        val rawPubKey = parts[4].replace("\n", "").trim()
-
-                        // RECONSTRUCCIÓN PERFECTA PARA PYTHON (Chunks de 64 caracteres)
-                        val chunkedPubKey = rawPubKey.chunked(64).joinToString("\n")
-                        val publicKey = "-----BEGIN PUBLIC KEY-----\n$chunkedPubKey\n-----END PUBLIC KEY-----\n"
-
-                        val transaction = TransactionHistory(
-                            idTransaccion = txId,
-                            monto = amountStr.toDouble().toLong(),
-                            timestamp = timestamp,
-                            comercioId = 1,
-                            tokenId = "TOKEN-USER-QR", // Estandarizado con el QR
-                            firma = signature,
-                            payloadOriginal = "$txId|$amountStr|$timestamp",
-                            clavePublica = publicKey,
-                            isOutgoing = false,
-                            estadoSincronizacion = SyncState.PENDING
-                        )
                         
-                        lastTransaction = transaction
-                        PaymentState.addTransaction(transaction)
-                        
-                        scope.launch(Dispatchers.IO) {
-                            val db = AppDatabase.getInstance(context)
-                            db.transactionDao().insertTransaction(transaction)
-                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                        if (parts.size == 5) {
+                            val rawPubKey = parts[0].replace("\n", "").trim()
+                            val signature = parts[1].replace("\n", "").trim()
+                            val tokenId = parts[2]
+                            val montoEnCentavos = parts[3].toLong()
+                            val timestamp = parts[4]
+
+                            // Reconstruimos el ID de transacción para no tener que mandarlo por aire
+                            val txId = "TX-NFC-$timestamp"
+
+                            // RECONSTRUCCIÓN PERFECTA PARA PYTHON (Chunks de 64 caracteres)
+                            val chunkedPubKey = rawPubKey.chunked(64).joinToString("\n")
+                            val publicKey = "-----BEGIN PUBLIC KEY-----\n$chunkedPubKey\n-----END PUBLIC KEY-----\n"
+
+                            // El backend espera que el payloadOriginal coincida con lo firmado: txId|montoFormatted|timestamp
+                            val amountFormatted = String.format(java.util.Locale.US, "%.1f", montoEnCentavos.toDouble())
+                            val payloadOriginal = "$txId|$amountFormatted|$timestamp"
+
+                            val transaction = TransactionHistory(
+                                idTransaccion = txId,
+                                monto = montoEnCentavos,
+                                timestamp = timestamp,
+                                comercioId = 1,
+                                tokenId = tokenId,
+                                firma = signature,
+                                payloadOriginal = payloadOriginal,
+                                clavePublica = publicKey,
+                                isOutgoing = false,
+                                estadoSincronizacion = SyncState.PENDING
+                            )
+                            
+                            lastTransaction = transaction
+                            PaymentState.addTransaction(transaction)
+                            
+                            scope.launch(Dispatchers.IO) {
+                                val db = AppDatabase.getInstance(context)
+                                db.transactionDao().insertTransaction(transaction)
+                                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                            }
+                        } else {
+                            Log.e("NFC", "Error: Payload malformado o incompleto")
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("NFC", "Error", e)
+                        Log.e("NFC", "Error procesando Micro-Payload", e)
                     }
                 }
             }
@@ -178,6 +190,11 @@ private fun readPaymentContractFromTag(tag: Tag): String {
             }
 
             val payload = response.copyOfRange(0, response.size - STATUS_SUCCESS.size).toString(Charsets.UTF_8)
+            
+            if (payload.contains("ERROR|SALDO_INSUFICIENTE")) {
+                return "ERROR: El cliente no tiene saldo suficiente."
+            }
+
             val parts = payload.split("|")
             if (parts.size >= 5) {
                 return "NFC_PAYLOAD:$payload"

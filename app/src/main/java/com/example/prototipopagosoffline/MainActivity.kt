@@ -240,8 +240,8 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    // Formateamos el monto dividiendo por 100.00 para la visualización estándar fintech
-                    text = "$${String.format(java.util.Locale.US, "%.2f", PaymentState.currentPaymentAmount / 100.0)}",
+                    // Mostramos el saldo real de la billetera
+                    text = "$${String.format(java.util.Locale.US, "%.2f", PaymentState.userBalance)}",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-1.5).sp
@@ -305,6 +305,9 @@ fun HomeScreen(
                                 withContext(Dispatchers.Main) {
                                     if (response.isSuccessful && response.body()?.exitoso == true) {
                                         val nuevoSaldo = response.body()?.nuevo_saldo
+                                        if (nuevoSaldo != null) {
+                                            PaymentState.userBalance = nuevoSaldo
+                                        }
                                         Toast.makeText(context, "¡Recarga exitosa! Nuevo saldo: $$nuevoSaldo", Toast.LENGTH_LONG).show()
                                     } else {
                                         Toast.makeText(context, "Error en la recarga", Toast.LENGTH_SHORT).show()
@@ -368,7 +371,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "$0.00",
+                                text = "$${String.format(java.util.Locale.US, "%.2f", PaymentState.merchantBalance)}",
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -582,8 +585,37 @@ fun ClientScreen(
     onPagoQrClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var amount by remember { mutableStateOf("") }
     var isReadyToPay by remember { mutableStateOf(false) }
+
+    val nfcAdapter = android.nfc.NfcAdapter.getDefaultAdapter(context)
+    val cardEmulation = android.nfc.cardemulation.CardEmulation.getInstance(nfcAdapter)
+    val componentName = android.content.ComponentName(context, com.example.prototipopagosoffline.utils.PaymentHCEService::class.java)
+
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        if (nfcAdapter != null && nfcAdapter.isEnabled) {
+            cardEmulation.setPreferredService(context as android.app.Activity, componentName)
+        }
+        onDispose {
+            if (nfcAdapter != null && nfcAdapter.isEnabled) {
+                cardEmulation.unsetPreferredService(context as android.app.Activity)
+            }
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(isReadyToPay) {
+        if (isReadyToPay) {
+            // Mientras el HCE no lo ponga en 0, esperamos
+            while (PaymentState.currentPaymentAmount > 0L) {
+                kotlinx.coroutines.delay(500)
+            }
+            // Si sale del loop, el pago fue exitoso
+            isReadyToPay = false
+            Toast.makeText(context, "✅ ¡Pago NFC enviado!", Toast.LENGTH_LONG).show()
+            onBack() // Vuelve al menú principal
+        }
+    }
 
     Column(
         modifier = modifier
@@ -609,7 +641,7 @@ fun ClientScreen(
 
         if (!isReadyToPay) {
             Text(
-                text = "Saldo disponible: $10.000",
+                text = "Saldo disponible: $${String.format(java.util.Locale.US, "%.2f", PaymentState.userBalance)}",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -637,15 +669,19 @@ fun ClientScreen(
                     val montoDoble = amount.toDoubleOrNull() ?: 0.0
                     val montoEnCentavos = (montoDoble * 100).toLong()
                     if (montoEnCentavos > 0) {
-                        PaymentState.currentPaymentAmount = montoEnCentavos
-                        isReadyToPay = true
+                        if (montoDoble <= PaymentState.userBalance) {
+                            PaymentState.currentPaymentAmount = montoEnCentavos
+                            isReadyToPay = true
+                        } else {
+                            android.widget.Toast.makeText(context, "❌ Saldo insuficiente", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(64.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = amount.isNotEmpty() && (amount.toDoubleOrNull() ?: 0.0) > 0
+                enabled = amount.isNotEmpty() && (amount.toDoubleOrNull() ?: 0.0) > 0 && (amount.toDoubleOrNull() ?: 0.0) <= PaymentState.userBalance
             ) {
                 Text("Listo para pagar", fontSize = 18.sp)
             }

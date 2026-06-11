@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Prototipo Pagos Offline</string>
+    <string name="servicios_pagos">Servicios de Pago Offline</string>
+    <string name="grupo_pagos">Grupo de Pagos TIF</string>
 </resources>

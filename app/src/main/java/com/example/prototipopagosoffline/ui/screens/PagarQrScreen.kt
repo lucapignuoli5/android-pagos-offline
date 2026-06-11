@@ -125,14 +125,15 @@ fun PagarQrScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val amountLong = inputAmount.toLongOrNull() ?: 0L
-                        if (amountLong > 0) {
-                            if (amountLong.toDouble() <= PaymentState.userBalance) {
+                        val amountDoble = inputAmount.toDoubleOrNull() ?: 0.0
+                        val amountCents = (amountDoble * 100).toLong()
+                        if (amountCents > 0L) {
+                            if (amountDoble <= PaymentState.userBalance) {
                                 authenticateAndPay(
                                     context = context,
                                     onAuthenticated = {
                                         showAmountDialog = false
-                                        sendPayment(targetIp, targetPort, amountLong, context, scope, 
+                                        sendPayment(targetIp, targetPort, amountCents, context, scope, 
                                             onSuccess = { tx ->
                                                 lastTransaction = tx
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -194,7 +195,7 @@ fun PagarQrScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Monto: $${Math.abs(lastTransaction!!.monto)}",
+                text = "Monto: $${String.format(java.util.Locale.US, "%.2f", Math.abs(lastTransaction!!.monto) / 100.0)}",
                 style = MaterialTheme.typography.bodyLarge
             )
             
@@ -223,10 +224,12 @@ fun PagarQrScreen(
                 onClick = {
                     val options = ScanOptions()
                     options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                    options.setPrompt("Escanea el QR del comercio")
+                    options.setPrompt("Apunta la cámara al código QR")
                     options.setCameraId(0)
                     options.setBeepEnabled(false)
                     options.setBarcodeImageEnabled(true)
+                    options.setCaptureActivity(com.example.prototipopagosoffline.ui.screens.CustomScannerActivity::class.java)
+                    options.setOrientationLocked(true)
                     scanLauncher.launch(options)
                 },
                 modifier = Modifier.fillMaxWidth().height(64.dp),
