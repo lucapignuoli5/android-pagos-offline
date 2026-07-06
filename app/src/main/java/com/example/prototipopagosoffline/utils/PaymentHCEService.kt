@@ -36,7 +36,7 @@ class PaymentHCEService : HostApduService() {
 
             val txId = "TX-NFC-${System.currentTimeMillis()}"
             val timestamp = (System.currentTimeMillis() / 1000).toString()
-            val amountFormatted = String.format(Locale.US, "%.1f", amount.toDouble())
+            val amountFormatted = amount.toString()
             val tokenId = "TOKEN-USER-QR"
 
             val payloadToSign = "$txId|$amountFormatted|$timestamp"

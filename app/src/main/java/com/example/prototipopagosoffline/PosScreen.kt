@@ -78,7 +78,7 @@ fun PosScreen(
                             val publicKey = "-----BEGIN PUBLIC KEY-----\n$chunkedPubKey\n-----END PUBLIC KEY-----\n"
 
                             // El backend espera que el payloadOriginal coincida con lo firmado: txId|montoFormatted|timestamp
-                            val amountFormatted = String.format(java.util.Locale.US, "%.1f", montoEnCentavos.toDouble())
+                            val amountFormatted = montoEnCentavos.toString()
                             val payloadOriginal = "$txId|$amountFormatted|$timestamp"
 
                             val transaction = TransactionHistory(

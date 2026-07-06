@@ -176,6 +176,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var displayBalance by remember { mutableStateOf(PaymentState.userBalance.toDouble()) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -240,8 +241,8 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    // Mostramos el saldo real de la billetera
-                    text = "$${String.format(java.util.Locale.US, "%.2f", PaymentState.userBalance)}",
+                    // Mostramos el saldo que se actualiza dinámicamente
+                    text = "$${String.format(java.util.Locale.US, "%.2f", displayBalance)}",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-1.5).sp
@@ -287,30 +288,52 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 32.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
+                CleanActionButton(icon = Icons.Default.Sync, label = "Actualizar", onClick = {
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            val response = RetrofitClient.apiService.consultarSaldo()
+                            withContext(Dispatchers.Main) {
+                                if (response.isSuccessful && response.body() != null) {
+                                    displayBalance = response.body()!!.saldo_real
+                                    Toast.makeText(context, "Saldo actualizado", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Error al obtener saldo", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Error de red: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                })
                 CleanActionButton(icon = Icons.Default.Nfc, label = "Pagar NFC", onClick = onClientClick)
                 CleanActionButton(icon = Icons.Default.QrCodeScanner, label = "Pagar QR", onClick = onPagarQrClick)
                 CleanActionButton(
-                    icon = Icons.Default.Refresh, 
-                    label = "Cargar", 
+                    icon = Icons.Default.Refresh,
+                    label = "Cargar",
                     onClick = {
-                        Toast.makeText(context, "Procesando pago externo...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Generando link de pago...", Toast.LENGTH_SHORT).show()
                         scope.launch(Dispatchers.IO) {
                             try {
-                                val request = com.example.prototipopagosoffline.network.RecargaRequest(
+                                val request = com.example.prototipopagosoffline.network.LinkPagoRequest(
                                     token_id = "TOKEN-USER-QR",
-                                    monto_recarga = 5000.0
+                                    monto = 1 // Monto fijo para la prueba (ajustado para evitar pagos accidentales)
                                 )
-                                val response = RetrofitClient.apiService.recargarSaldo(request)
+                                val response = RetrofitClient.apiService.crearLinkPago(request)
 
                                 withContext(Dispatchers.Main) {
-                                    if (response.isSuccessful && response.body()?.exitoso == true) {
-                                        val nuevoSaldo = response.body()?.nuevo_saldo
-                                        if (nuevoSaldo != null) {
-                                            PaymentState.userBalance = nuevoSaldo
-                                        }
-                                        Toast.makeText(context, "¡Recarga exitosa! Nuevo saldo: $$nuevoSaldo", Toast.LENGTH_LONG).show()
+                                    if (response.isSuccessful && response.body() != null) {
+                                        val url = response.body()!!.init_point
+
+                                        // Copiar al portapapeles en lugar de abrir la app
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        val clip = android.content.ClipData.newPlainText("Link Mercado Pago", url)
+                                        clipboard.setPrimaryClip(clip)
+
+                                        Toast.makeText(context, "🔗 Link copiado. Abrir en incógnito.", Toast.LENGTH_LONG).show()
                                     } else {
-                                        Toast.makeText(context, "Error en la recarga", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Error al generar link", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             } catch (e: Exception) {

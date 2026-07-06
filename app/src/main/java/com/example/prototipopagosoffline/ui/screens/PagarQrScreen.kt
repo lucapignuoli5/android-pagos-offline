@@ -314,9 +314,9 @@ private fun sendPayment(
                 val tokenId = "TOKEN-USER-QR"
                 val publicKey = SecurityUtils.getPublicKey()
                 
-                // Asegurar monto absoluto y formato decimal estricto para la firma
+                // Asegurar monto absoluto y formato en centavos enteros para la firma
                 val absoluteAmount = Math.abs(amount)
-                val amountFormatted = String.format(Locale.US, "%.1f", absoluteAmount.toDouble())
+                val amountFormatted = absoluteAmount.toString()
                 
                 // Nuevo formato estricto con separadores pipe (|)
                 val payloadToSign = "${txId}|${amountFormatted}|${timestamp}"

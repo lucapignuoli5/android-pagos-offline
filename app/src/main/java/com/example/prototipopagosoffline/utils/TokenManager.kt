@@ -28,4 +28,14 @@ class TokenManager(context: Context) {
     fun clearToken() {
         sharedPreferences.edit().remove("jwt_token").apply()
     }
+
+    fun getDatabaseKey(): ByteArray {
+        val key = sharedPreferences.getString("db_secret_key", null)
+        if (key != null) {
+            return android.util.Base64.decode(key, android.util.Base64.DEFAULT)
+        }
+        val newKey = java.security.SecureRandom().generateSeed(32)
+        sharedPreferences.edit().putString("db_secret_key", android.util.Base64.encodeToString(newKey, android.util.Base64.DEFAULT)).apply()
+        return newKey
+    }
 }

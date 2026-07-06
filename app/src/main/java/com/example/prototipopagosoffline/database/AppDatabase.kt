@@ -28,11 +28,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return instance ?: synchronized(this) {
+                val tokenManager = com.example.prototipopagosoffline.utils.TokenManager(context)
+                val factory = net.sqlcipher.database.SupportFactory(tokenManager.getDatabaseKey())
+
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
+                .openHelperFactory(factory)
                 .fallbackToDestructiveMigration()
                 .build().also { instance = it }
             }
