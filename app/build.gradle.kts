@@ -20,6 +20,21 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val demoUsername = providers.gradleProperty("DEMO_USERNAME")
+            .orElse(providers.environmentVariable("DEMO_USERNAME"))
+            .orElse("")
+            .get()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        val demoPassword = providers.gradleProperty("DEMO_PASSWORD")
+            .orElse(providers.environmentVariable("DEMO_PASSWORD"))
+            .orElse("")
+            .get()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "DEMO_USERNAME", "\"$demoUsername\"")
+        buildConfigField("String", "DEMO_PASSWORD", "\"$demoPassword\"")
     }
 
     buildTypes {
@@ -37,6 +52,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -23,3 +23,8 @@ data class LoginResponse(
 
 data class RecargaRequest(val token_id: String, val monto_recarga: Double)
 data class RecargaResponse(val exitoso: Boolean, val nuevo_saldo: Double)
+
+data class SaldoResponse(
+    val usuario: String,
+    val saldo_real: Double
+)
