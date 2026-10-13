@@ -18,7 +18,9 @@ data class LoginRequest(
 
 data class LoginResponse(
     val access_token: String,
-    val token_type: String
+    val token_type: String,
+    val expires_in: Int = 3600,
+    val wallet_id: String
 )
 
 data class RecargaRequest(val token_id: String, val monto_recarga: Double)

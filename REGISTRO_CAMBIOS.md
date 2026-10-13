@@ -113,3 +113,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no hay dispositivo/emulador disponible para ejecutar la migración ni HCE; la descarga inicial de autorizaciones y registro remoto de claves queda para la unidad de integración con backend; no se verificó hardware ACR122U.
 - **Commit:** `feat(wallet): [TFG-F3-AN-01] persistir reservas y autorizaciones`
 - **Impacto académico:** materializa la diferencia entre saldo confirmado, saldo reservado y saldo gastable.
+
+## TFG-F3-AN-02 — Conservar la billetera recibida en el login
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el cliente debe usar el mismo identificador de billetera que el backend autoriza.
+- **Comportamiento anterior:** `LoginResponse` ignoraba la billetera asociada.
+- **Comportamiento nuevo:** el DTO conserva `wallet_id`, `expires_in` y token para aprovisionar reservas en unidades posteriores.
+- **Archivos:** `network/SyncItem.kt`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** compilación Android y pruebas JVM verifican que el contrato actualizado se deserializa sin romper el cliente.
+- **Limitaciones:** no se agregan todavía llamadas de aprovisionamiento.
+- **Commit:** `feat(auth): [TFG-F3-AN-02] conservar billetera del login`
+- **Impacto académico:** documenta la asociación explícita entre sesión y billetera local.
