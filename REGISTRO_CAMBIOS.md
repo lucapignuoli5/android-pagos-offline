@@ -97,3 +97,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no sustituye la comprobación física del instante de lectura.
 - **Commit:** `fix(protocol): [TFG-F1-AN-05] rechazar acuses vencidos`
 - **Impacto académico:** precisa que la aceptación local ocurre dentro de los dos minutos firmados por el POS.
+
+## TFG-F3-AN-01 — Billeteras, autorizaciones y reservas persistentes
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** el saldo global no sobrevive al proceso y una entrega incierta puede rehabilitar fondos si no existe una reserva durable.
+- **Comportamiento anterior:** `OfflineWallet` guardaba un único saldo disponible; HCE y UI dependían de `PaymentState` y no representaban autorizaciones ni reservas.
+- **Comportamiento nuevo:** Room 7 conserva saldo confirmado y reserva separada; las autorizaciones offline y metadatos de claves quedan persistidos; la confirmación valida la solicitud, consume autorización, reserva fondos y emite el comprobante en una transacción. La pantalla cliente espera una solicitud POS y requiere confirmación explícita.
+- **Decisión:** migrar Room 6→7 conservando saldos, agregar saldo confirmado/reservado, autorizaciones y metadatos de claves por billetera, y emitir el comprobante dentro de una transacción de reserva.
+- **Archivos:** `database/AppDatabase.kt`, `database/OfflineWallet.kt`, `database/WalletDao.kt`, `database/LocalOfflineAuthorization.kt`, `database/AuthorizationDao.kt`, `database/NfcExchange.kt`, `database/NfcExchangeDao.kt`, `utils/WalletKeyManager.kt`, `utils/OfflinePaymentCoordinator.kt`, `MainActivity.kt`, `app/schemas/.../7.json`, prueba de migración instrumentada y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** Room, estado de operación, claves de billetera y emisión de comprobante.
+- **Pruebas:** `:app:testDebugUnitTest`, `:app:assembleDebug` y `:app:compileDebugAndroidTestKotlin` correctos; la prueba instrumentada de migración quedó compilada. `:app:lintDebug` permanece ejecutándose en la verificación de cierre.
+- **Limitaciones:** no hay dispositivo/emulador disponible para ejecutar la migración ni HCE; la descarga inicial de autorizaciones y registro remoto de claves queda para la unidad de integración con backend; no se verificó hardware ACR122U.
+- **Commit:** `feat(wallet): [TFG-F3-AN-01] persistir reservas y autorizaciones`
+- **Impacto académico:** materializa la diferencia entre saldo confirmado, saldo reservado y saldo gastable.

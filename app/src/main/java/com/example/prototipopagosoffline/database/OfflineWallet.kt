@@ -8,6 +8,12 @@ import androidx.room.PrimaryKey
 data class OfflineWallet(
     @PrimaryKey
     val id: String,
-    @ColumnInfo(name = "saldo_disponible")
-    val saldoDisponible: Long
-)
+    @ColumnInfo(name = "confirmed_balance_cents")
+    val confirmedBalanceCents: Long,
+    @ColumnInfo(name = "reserved_balance_cents")
+    val reservedBalanceCents: Long = 0,
+    val currency: String = "ARS"
+) {
+    val spendableBalanceCents: Long
+        get() = confirmedBalanceCents - reservedBalanceCents
+}

@@ -120,6 +120,7 @@ class NfcProtocolEngineTest {
         override suspend fun getState(operationId: String): ExchangeState? =
             request?.let { ExchangeState.REQUEST_RECEIVED }
         override suspend fun getReceipt(operationId: String): ByteArray? = null
+        override suspend fun markDeliveryStarted(operationId: String) = Unit
         override suspend fun saveAck(operationId: String, signedEnvelope: ByteArray): SaveResult = SaveResult.INSERTED
     }
 

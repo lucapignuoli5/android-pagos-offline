@@ -13,10 +13,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OfflineWallet::class,
         TransactionHistory::class,
         NfcExchange::class,
-        TrustedPublicKey::class
+        TrustedPublicKey::class,
+        LocalOfflineAuthorization::class,
+        WalletKeyMetadata::class
     ],
-    version = 6,
-    exportSchema = false
+    version = 7,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +27,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
 
     abstract fun nfcExchangeDao(): NfcExchangeDao
+
+    abstract fun authorizationDao(): AuthorizationDao
 
     companion object {
         private const val DATABASE_NAME = "offline_payments.db"
@@ -39,7 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
                 .build().also { instance = it }
             }
         }
@@ -50,6 +54,25 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_nfc_exchanges_state_created_at_epoch_seconds ON nfc_exchanges(state, created_at_epoch_seconds)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS trusted_public_keys (key_id TEXT NOT NULL PRIMARY KEY, fingerprint TEXT NOT NULL, public_key_b64 TEXT NOT NULL, owner_type TEXT NOT NULL, revoked INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_trusted_public_keys_fingerprint ON trusted_public_keys(fingerprint)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE offline_wallet_v7 (id TEXT NOT NULL PRIMARY KEY, confirmed_balance_cents INTEGER NOT NULL, reserved_balance_cents INTEGER NOT NULL, currency TEXT NOT NULL)")
+                db.execSQL("INSERT INTO offline_wallet_v7 (id, confirmed_balance_cents, reserved_balance_cents, currency) SELECT id, saldo_disponible, 0, 'ARS' FROM offline_wallet")
+                db.execSQL("DROP TABLE offline_wallet")
+                db.execSQL("ALTER TABLE offline_wallet_v7 RENAME TO offline_wallet")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN wallet_id TEXT")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN authorization_id TEXT")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN amount_cents INTEGER")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN merchant_id TEXT")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN terminal_id TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS local_offline_authorizations (id TEXT NOT NULL PRIMARY KEY, wallet_id TEXT NOT NULL, wallet_key_id TEXT NOT NULL, max_payment_cents INTEGER NOT NULL, remaining_amount_cents INTEGER NOT NULL, remaining_payments INTEGER NOT NULL, issued_at_epoch_seconds INTEGER NOT NULL, expires_at_epoch_seconds INTEGER NOT NULL, active INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_local_offline_authorizations_wallet_id ON local_offline_authorizations(wallet_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_local_offline_authorizations_wallet_key_id ON local_offline_authorizations(wallet_key_id)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS wallet_key_metadata (key_id TEXT NOT NULL PRIMARY KEY, wallet_id TEXT NOT NULL, keystore_alias TEXT NOT NULL, public_key_b64 TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL, retired INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_wallet_key_metadata_wallet_id ON wallet_key_metadata(wallet_id)")
             }
         }
     }

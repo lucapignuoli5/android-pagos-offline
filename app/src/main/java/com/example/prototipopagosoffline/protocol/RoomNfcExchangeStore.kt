@@ -34,6 +34,10 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
 
     override suspend fun getReceipt(operationId: String): ByteArray? = dao.getExchange(operationId)?.receiptEnvelope
 
+    override suspend fun markDeliveryStarted(operationId: String) {
+        dao.markDeliveryStarted(operationId)
+    }
+
     override suspend fun saveAck(operationId: String, signedEnvelope: ByteArray): SaveResult =
         database.withTransaction {
             val existing = dao.getExchange(operationId) ?: return@withTransaction SaveResult.CONFLICT
@@ -47,18 +51,6 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
             }
         }
 
-    suspend fun saveReceipt(operationId: String, signedEnvelope: ByteArray): SaveResult =
-        database.withTransaction {
-            val existing = dao.getExchange(operationId) ?: return@withTransaction SaveResult.CONFLICT
-            when {
-                existing.receiptEnvelope == null -> {
-                    check(dao.setReceipt(operationId, signedEnvelope) == 1)
-                    SaveResult.INSERTED
-                }
-                existing.receiptEnvelope.contentEquals(signedEnvelope) -> SaveResult.IDENTICAL
-                else -> SaveResult.CONFLICT
-            }
-        }
 }
 
 class RoomTrustedPublicKeyResolver(private val database: AppDatabase) : TrustedPublicKeyResolver {

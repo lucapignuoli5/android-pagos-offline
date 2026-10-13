@@ -609,8 +609,11 @@ fun ClientScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var amount by remember { mutableStateOf("") }
-    var isReadyToPay by remember { mutableStateOf(false) }
+    val database = remember { AppDatabase.getInstance(context) }
+    val coordinator = remember { com.example.prototipopagosoffline.utils.OfflinePaymentCoordinator(database) }
+    var pending by remember { mutableStateOf<com.example.prototipopagosoffline.database.NfcExchange?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     val nfcAdapter = android.nfc.NfcAdapter.getDefaultAdapter(context)
     val cardEmulation = android.nfc.cardemulation.CardEmulation.getInstance(nfcAdapter)
@@ -627,17 +630,8 @@ fun ClientScreen(
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(isReadyToPay) {
-        if (isReadyToPay) {
-            // Mientras el HCE no lo ponga en 0, esperamos
-            while (PaymentState.currentPaymentAmount > 0L) {
-                kotlinx.coroutines.delay(500)
-            }
-            // Si sale del loop, el pago fue exitoso
-            isReadyToPay = false
-            Toast.makeText(context, "✅ ¡Pago NFC enviado!", Toast.LENGTH_LONG).show()
-            onBack() // Vuelve al menú principal
-        }
+    LaunchedEffect(Unit) {
+        database.nfcExchangeDao().observeOldestPendingRequest().collect { pending = it }
     }
 
     Column(
@@ -654,7 +648,7 @@ fun ClientScreen(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
             }
             Text(
-                text = "Ingresar Monto",
+                text = "Solicitud de pago",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -662,90 +656,27 @@ fun ClientScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (!isReadyToPay) {
-            Text(
-                text = "Saldo disponible: $${String.format(java.util.Locale.US, "%.2f", PaymentState.userBalance)}",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = if (amount.isEmpty()) "$0" else "$$amount",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            CustomNumberPad(
-                onDigitClick = { if (amount.length < 8) amount += it },
-                onDeleteClick = { if (amount.isNotEmpty()) amount = amount.dropLast(1) }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    val montoDoble = amount.toDoubleOrNull() ?: 0.0
-                    val montoEnCentavos = (montoDoble * 100).toLong()
-                    if (montoEnCentavos > 0) {
-                        if (montoDoble <= PaymentState.userBalance) {
-                            PaymentState.currentPaymentAmount = montoEnCentavos
-                            isReadyToPay = true
-                        } else {
-                            android.widget.Toast.makeText(context, "❌ Saldo insuficiente", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = amount.isNotEmpty() && (amount.toDoubleOrNull() ?: 0.0) > 0 && (amount.toDoubleOrNull() ?: 0.0) <= PaymentState.userBalance
-            ) {
-                Text("Listo para pagar", fontSize = 18.sp)
-            }
+        Spacer(modifier = Modifier.height(32.dp))
+        if (pending == null) {
+            Text("Acercá el teléfono al POS para recibir una solicitud.", style = MaterialTheme.typography.bodyLarge)
         } else {
-            Spacer(modifier = Modifier.height(64.dp))
-            Icon(
-                imageVector = Icons.Default.Nfc,
-                contentDescription = null,
-                modifier = Modifier.size(120.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                text = "Confirmado: $$amount",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Acerca el teléfono al comercio",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            
-            Spacer(modifier = Modifier.weight(1f))
-            
-            Button(
-                onClick = { isReadyToPay = false },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Cambiar monto")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = onPagoQrClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Pagar con QR")
-            }
+            val request = runCatching { com.example.prototipopagosoffline.protocol.ProtocolV2.parseSignedEnvelope(pending!!.requestEnvelope).payload }.getOrNull()
+            Text("Comercio: ${request?.get("merchant_id")?.asString ?: "desconocido"}", style = MaterialTheme.typography.titleMedium)
+            Text("Importe: $${String.format(java.util.Locale.US, "%.2f", (request?.get("amount_cents")?.asLong ?: 0L) / 100.0)}", style = MaterialTheme.typography.headlineSmall)
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = {
+                scope.launch {
+                    try {
+                        val wallet = database.walletDao().getWallet() ?: error("Billetera no configurada")
+                        coordinator.confirm(pending!!.operationId, wallet.id)
+                        message = "Pago reservado. Acercá nuevamente el teléfono para entregar el comprobante."
+                    } catch (e: Exception) { message = e.message ?: "No se pudo confirmar" }
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Confirmar pago") }
         }
+        message?.let { Spacer(modifier = Modifier.height(16.dp)); Text(it, color = MaterialTheme.colorScheme.secondary) }
+        Spacer(modifier = Modifier.weight(1f))
+        Button(onClick = onPagoQrClick, modifier = Modifier.fillMaxWidth()) { Text("Pagar con QR") }
     }
 }
 

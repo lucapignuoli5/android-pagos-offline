@@ -81,6 +81,7 @@ class NfcProtocolEngine(
         val receipt = store.getReceipt(operationId) ?: return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
         val chunks = ProtocolV2.chunkMessage(receipt)
         if (command.sequence !in chunks.indices) return ProtocolV2.SW_NOT_FOUND
+        if (command.sequence == 0) store.markDeliveryStarted(operationId)
         val lastFlag = if (command.sequence == chunks.lastIndex) 1.toByte() else 0.toByte()
         return byteArrayOf(lastFlag) + chunks[command.sequence] + ProtocolV2.SW_OK
     }
@@ -168,9 +169,18 @@ interface NfcExchangeStore {
     suspend fun getRequest(operationId: String): ByteArray?
     suspend fun getState(operationId: String): ExchangeState?
     suspend fun getReceipt(operationId: String): ByteArray?
+    suspend fun markDeliveryStarted(operationId: String)
     suspend fun saveAck(operationId: String, signedEnvelope: ByteArray): SaveResult
 }
 
 enum class SaveResult { INSERTED, IDENTICAL, CONFLICT }
 
-enum class ExchangeState { REQUEST_RECEIVED, READY_FOR_DELIVERY, LOCALLY_ACCEPTED }
+enum class ExchangeState {
+    REQUEST_RECEIVED,
+    RESERVED,
+    DELIVERY_UNCERTAIN,
+    LOCALLY_ACCEPTED,
+    SYNCED,
+    REJECTED,
+    CONFLICT
+}
