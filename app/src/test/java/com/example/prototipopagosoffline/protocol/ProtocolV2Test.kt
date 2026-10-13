@@ -47,6 +47,22 @@ class ProtocolV2Test {
     }
 
     @Test
+    fun signedEnvelopePreservesExactPythonPayload() {
+        val wire = ProtocolV2.encodeSignedEnvelope(request, signatureBase64)
+        val envelope = ProtocolV2.parseSignedEnvelope(wire)
+        assertArrayEquals(canonicalRequest.toByteArray(), envelope.payloadBytes)
+        assertEquals(request, envelope.payload)
+        assertTrue(envelope.verify(publicKeyBase64))
+
+        val changed = wire.toString(Charsets.UTF_8)
+            .replace("payload_b64", "payload_data")
+            .toByteArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            ProtocolV2.parseSignedEnvelope(changed)
+        }
+    }
+
+    @Test
     fun rejectsInvalidAmountsAndAdditionalFields() {
         listOf(0, -1, 100_001).forEach { amount ->
             val changed = request.deepCopy().apply { addProperty("amount_cents", amount) }

@@ -149,15 +149,55 @@ object ProtocolV2 {
     }
 
     fun verifyPayloadSignature(payload: JsonObject, signatureBase64: String, publicKeyBase64: String): Boolean {
+        return verifyExactSignature(
+            canonicalJson(payload).toByteArray(Charsets.UTF_8),
+            signatureBase64,
+            publicKeyBase64
+        )
+    }
+
+    fun encodeSignedEnvelope(payload: JsonObject, signatureBase64: String): ByteArray {
+        val payloadBytes = canonicalJson(payload).toByteArray(Charsets.UTF_8)
+        decodeBase64(signatureBase64, "signature_b64")
+        val envelope = JsonObject().apply {
+            addProperty("payload_b64", Base64.getEncoder().encodeToString(payloadBytes))
+            addProperty("signature_b64", signatureBase64)
+        }
+        val encoded = canonicalJson(envelope).toByteArray(Charsets.UTF_8)
+        require(encoded.size <= MAX_MESSAGE_BYTES) { "El sobre firmado supera 4 KiB" }
+        return encoded
+    }
+
+    fun parseSignedEnvelope(data: ByteArray): SignedEnvelope {
+        require(data.isNotEmpty() && data.size <= MAX_MESSAGE_BYTES) { "Longitud de sobre invalida" }
+        val text = data.toString(Charsets.UTF_8)
+        val parsed = JsonParser.parseString(text)
+        require(parsed.isJsonObject) { "El sobre debe ser un objeto JSON" }
+        val envelope = parsed.asJsonObject
+        require(envelope.keySet() == setOf("payload_b64", "signature_b64")) {
+            "Campos de sobre incompatibles"
+        }
+        require(canonicalJson(envelope) == text) { "El sobre firmado no es canonico" }
+        val payloadBytes = decodeBase64(envelope.string("payload_b64"), "payload_b64")
+        val signature = envelope.string("signature_b64")
+        decodeBase64(signature, "signature_b64")
+        return SignedEnvelope(payloadBytes, parseCanonicalPayload(payloadBytes), signature)
+    }
+
+    fun verifyExactSignature(
+        payloadBytes: ByteArray,
+        signatureBase64: String,
+        publicKeyBase64: String
+    ): Boolean {
         return try {
-            val publicDer = Base64.getDecoder().decode(publicKeyBase64)
+            val publicDer = decodeBase64(publicKeyBase64, "public_key_b64")
             val publicKey = KeyFactory.getInstance("EC")
                 .generatePublic(X509EncodedKeySpec(publicDer)) as ECPublicKey
             requireP256(publicKey)
             val verifier = Signature.getInstance("SHA256withECDSA")
             verifier.initVerify(publicKey)
-            verifier.update(canonicalJson(payload).toByteArray(Charsets.UTF_8))
-            verifier.verify(Base64.getDecoder().decode(signatureBase64))
+            verifier.update(payloadBytes)
+            verifier.verify(decodeBase64(signatureBase64, "signature_b64"))
         } catch (_: Exception) {
             false
         }
@@ -266,6 +306,15 @@ object ProtocolV2 {
         require(Base64.getUrlDecoder().decode("$value==").size == 16) { "nonce debe contener 128 bits" }
     }
 
+    private fun decodeBase64(value: String, field: String): ByteArray {
+        require(!value.contains('\n') && !value.contains('\r')) { "$field no admite saltos" }
+        return try {
+            Base64.getDecoder().decode(value)
+        } catch (exception: IllegalArgumentException) {
+            throw IllegalArgumentException("$field debe ser Base64 valido", exception)
+        }
+    }
+
     private fun timestamp(value: String, field: String): Instant {
         require(timestampPattern.matches(value)) { "$field debe estar en UTC sin fracciones" }
         return try {
@@ -303,3 +352,15 @@ data class ApduCommand(
     val isLast: Boolean,
     val data: ByteArray
 )
+
+data class SignedEnvelope(
+    val payloadBytes: ByteArray,
+    val payload: JsonObject,
+    val signatureBase64: String
+) {
+    fun verify(publicKeyBase64: String): Boolean = ProtocolV2.verifyExactSignature(
+        payloadBytes,
+        signatureBase64,
+        publicKeyBase64
+    )
+}

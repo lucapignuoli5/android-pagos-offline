@@ -33,3 +33,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la máquina de estados HCE y la persistencia se integran en unidades posteriores; no se acredita hardware NFC.
 - **Commit:** `feat(protocol): [TFG-F1-AN-01] implementar contrato v2 en Android`
 - **Impacto académico:** aporta evidencia cruzada de que Kotlin interpreta el contrato definido en Python.
+
+## TFG-F1-AN-02 — Sobre firmado interoperable
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** HCE debe verificar los bytes recibidos y no una reconstrucción del payload.
+- **Comportamiento anterior:** la biblioteca Kotlin solo aceptaba objetos JSON en memoria.
+- **Comportamiento nuevo:** Android codifica y analiza el sobre canónico, conserva el payload byte a byte y verifica la firma directamente sobre esos bytes.
+- **Decisión:** adoptar el sobre canónico `payload_b64`/`signature_b64` definido en Python y verificar directamente los bytes decodificados.
+- **Archivos:** `app/src/main/java/com/example/prototipopagosoffline/protocol/ProtocolV2.kt`, `app/src/test/java/com/example/prototipopagosoffline/protocol/ProtocolV2Test.kt`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** representación de mensajes firmados en NFC y sincronización.
+- **Pruebas:** 6 pruebas específicas de protocolo Android y una prueba heredada; sobre producido y analizado sin alterar el vector Python, firma válida y rechazo de campo de sobre alterado.
+- **Limitaciones:** la resolución de claves registradas se conecta al flujo HCE en la siguiente unidad.
+- **Commit:** `feat(protocol): [TFG-F1-AN-02] preservar payload firmado en Android`
+- **Impacto académico:** demuestra que ambas plataformas conservan el mismo material firmado.
