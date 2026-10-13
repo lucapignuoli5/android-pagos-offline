@@ -49,3 +49,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la resolución de claves registradas se conecta al flujo HCE en la siguiente unidad.
 - **Commit:** `feat(protocol): [TFG-F1-AN-02] preservar payload firmado en Android`
 - **Impacto académico:** demuestra que ambas plataformas conservan el mismo material firmado.
+
+## TFG-F1-AN-03 — Máquina de estados APDU v2
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** `SELECT` no puede crear pagos y el intercambio fragmentado debe ser ordenado, verificable e idempotente.
+- **Comportamiento anterior:** seleccionar el AID generaba, firmaba y persistía inmediatamente una operación basada en estado global volátil.
+- **Comportamiento nuevo:** `SELECT` devuelve capacidades sin mutar datos; solicitudes y acuses se ensamblan en orden, verifican contra claves registradas y se delegan a almacenamiento durable; estado y comprobante se consultan por operación; un APDU idéntico repite la misma respuesta.
+- **Decisión:** encapsular el protocolo en un motor suspendible con interfaces explícitas para almacenamiento durable y claves confiables.
+- **Archivos:** `app/src/main/java/com/example/prototipopagosoffline/protocol/NfcProtocolEngine.kt`, `app/src/test/java/com/example/prototipopagosoffline/protocol/NfcProtocolEngineTest.kt`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** comandos APDU de solicitud, estado, comprobante y acuse.
+- **Pruebas:** 4 pruebas específicas del motor cubren `SELECT` sin efecto, solicitud fragmentada, reintento exacto, clave desconocida, fragmento fuera de orden y firma alterada; suite Android completa con 11 pruebas correcta.
+- **Limitaciones:** esta unidad prueba el motor con dobles en memoria; Room y `HostApduService` se conectan en la siguiente unidad.
+- **Commit:** `feat(nfc): [TFG-F1-AN-03] implementar maquina APDU v2`
+- **Impacto académico:** permite demostrar semántica de dos acercamientos e idempotencia sin atribuir resultados de hardware.
