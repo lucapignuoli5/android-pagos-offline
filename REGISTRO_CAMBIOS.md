@@ -17,3 +17,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** esta línea base conserva los defectos funcionales diagnosticados para corregirlos en fases posteriores. Las pruebas existentes son mínimas y no validan NFC, persistencia ni interoperabilidad física.
 - **Commit:** `chore(baseline): [TFG-F0-AN-01] registrar linea base auditada`
 - **Impacto académico:** fija qué comportamiento estaba implementado antes del rediseño Android–POS.
+
+## TFG-F1-AN-01 — Contrato criptográfico v2 compatible con Python
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** Android debe validar y firmar exactamente los mismos bytes que el POS y el backend.
+- **Comportamiento anterior:** HCE construía una cadena delimitada con datos parciales y generaba una operación al seleccionar el AID.
+- **Comportamiento nuevo:** Android serializa, valida, firma y verifica el contrato v2 con las mismas reglas que Python, y codifica/decodifica los fragmentos APDU definidos.
+- **Decisión:** portar la serialización canónica, validación estricta, ECDSA P-256 y framing APDU sin introducir una reestructuración general de Android.
+- **Archivos:** `app/src/main/java/com/example/prototipopagosoffline/protocol/ProtocolV2.kt`, `app/src/test/java/com/example/prototipopagosoffline/protocol/ProtocolV2Test.kt`, `app/src/test/resources/protocol_v2_vectors.json`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** mensajes firmados y transporte APDU v2.
+- **Pruebas:** pruebas JVM reproducen el vector canónico Python, verifican su firma, firman con P-256 en Kotlin, alteran individualmente todos los campos, rechazan importes inválidos y comprueban fragmentación APDU; `:app:testDebugUnitTest` correcto.
+- **Limitaciones:** la máquina de estados HCE y la persistencia se integran en unidades posteriores; no se acredita hardware NFC.
+- **Commit:** `feat(protocol): [TFG-F1-AN-01] implementar contrato v2 en Android`
+- **Impacto académico:** aporta evidencia cruzada de que Kotlin interpreta el contrato definido en Python.
