@@ -159,3 +159,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se pudo simular cierre forzado en un dispositivo; el control se verificó por flujo y compilación.
 - **Commit:** `fix(session): [TFG-F3-AN-04] rechazar sesiones incompletas`
 - **Impacto académico:** diferencia una autenticación obtenida de una billetera offline efectivamente aprovisionada.
+
+## TFG-F4-AN-01 — Aprovisionar claves públicas del POS
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** HCE rechaza correctamente solicitudes de claves desconocidas, por lo que Android necesita una copia durable de las claves POS registradas antes de operar sin red.
+- **Comportamiento anterior:** `trusted_public_keys` solo podía poblarse manualmente o en pruebas.
+- **Comportamiento nuevo:** el aprovisionamiento autenticado descarga claves POS activas y las actualiza en Room antes de emitir autorizaciones offline.
+- **Archivos:** `network/ApiService.kt`, `network/SyncItem.kt`, `database/NfcExchangeDao.kt`, `utils/OfflineProvisioner.kt`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** registro local de claves confiables y ruta de claves del backend.
+- **Pruebas:** pruebas JVM y ensamblado Android correctos; el contrato de lista coincide con la respuesta Pydantic y Room actualiza por ID sin duplicar el registro.
+- **Limitaciones:** requiere iniciar sesión con conectividad después de registrar un POS nuevo; la revocación se refleja en la próxima actualización online.
+- **Commit:** `feat(keys): [TFG-F4-AN-01] aprovisionar claves POS confiables`
+- **Impacto académico:** completa la precondición criptográfica para que Android valide una solicitud de un POS registrado.

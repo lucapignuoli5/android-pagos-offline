@@ -34,7 +34,7 @@ interface NfcExchangeDao {
     @Query("UPDATE nfc_exchanges SET ack_envelope = :ack, state = 'LOCALLY_ACCEPTED' WHERE operation_id = :operationId AND state IN ('RESERVED', 'DELIVERY_UNCERTAIN')")
     suspend fun setAck(operationId: String, ack: ByteArray): Int
 
-    @Insert(onConflict = OnConflictStrategy.ABORT)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)
 
     @Query("SELECT * FROM trusted_public_keys WHERE key_id = :keyId AND fingerprint = :fingerprint AND revoked = 0 LIMIT 1")

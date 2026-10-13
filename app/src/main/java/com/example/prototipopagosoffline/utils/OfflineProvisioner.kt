@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.database.LocalOfflineAuthorization
 import com.example.prototipopagosoffline.database.OfflineWallet
+import com.example.prototipopagosoffline.database.TrustedPublicKey
 import com.example.prototipopagosoffline.network.ApiService
 import com.example.prototipopagosoffline.network.KeyRegistrationRequest
 import com.example.prototipopagosoffline.network.LoginResponse
@@ -39,6 +40,20 @@ class OfflineProvisioner(
         val registered = requireNotNull(keyResponse.body()) { "Respuesta de clave vacia" }
         require(registered.key_id == key.keyId && registered.fingerprint == key.fingerprint)
         require(registered.scope_id == login.wallet_id && registered.purpose == "wallet")
+
+        val trustedPosResponse = api.getTrustedKeys("pos")
+        require(trustedPosResponse.isSuccessful) { "No se pudieron actualizar las claves POS" }
+        requireNotNull(trustedPosResponse.body()).forEach { trusted ->
+            require(trusted.purpose == "pos" && trusted.key_id.isNotBlank())
+            database.nfcExchangeDao().insertTrustedKey(
+                TrustedPublicKey(
+                    keyId = trusted.key_id,
+                    fingerprint = trusted.fingerprint,
+                    publicKeyBase64 = trusted.public_key_b64,
+                    ownerType = "pos"
+                )
+            )
+        }
 
         val balanceResponse = api.getWalletBalance(login.wallet_id)
         require(balanceResponse.isSuccessful) { "No se pudo consultar el saldo" }

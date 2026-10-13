@@ -21,6 +21,9 @@ interface ApiService {
     @POST("/api/keys/register")
     suspend fun registerKey(@Body request: KeyRegistrationRequest): Response<KeyRegistrationResponse>
 
+    @GET("/api/keys/trusted/{purpose}")
+    suspend fun getTrustedKeys(@Path("purpose") purpose: String): Response<List<TrustedKeyResponse>>
+
     @POST("/api/offline-authorizations")
     suspend fun createOfflineAuthorization(
         @Body request: OfflineAuthorizationRequest

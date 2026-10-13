@@ -46,6 +46,14 @@ data class KeyRegistrationResponse(
     val created: Boolean
 )
 
+data class TrustedKeyResponse(
+    val key_id: String,
+    val fingerprint: String,
+    val purpose: String,
+    val scope_id: String,
+    val public_key_b64: String
+)
+
 data class OfflineAuthorizationRequest(
     val wallet_id: String,
     val wallet_key_id: String,
