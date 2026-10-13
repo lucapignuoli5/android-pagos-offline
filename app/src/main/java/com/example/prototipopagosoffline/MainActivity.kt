@@ -98,10 +98,15 @@ class MainActivity : AppCompatActivity() {
                     val savedToken = tokenManager.getToken()
                     val savedWalletId = tokenManager.getWalletId()
 
-                    if (!savedToken.isNullOrEmpty() && !savedWalletId.isNullOrEmpty()) {
+                    val hasLocalWallet = savedWalletId?.let {
+                        AppDatabase.getInstance(context).walletDao().getWalletById(it) != null
+                    } == true
+                    if (!savedToken.isNullOrEmpty() && hasLocalWallet) {
                         // Si ya hay sesión guardada, entra directo offline como cliente
                         currentRole = UserRole.CLIENTE
                         currentScreen = AppScreen.HOME
+                    } else if (!savedToken.isNullOrEmpty() || !savedWalletId.isNullOrEmpty()) {
+                        tokenManager.clearToken()
                     }
                     isInitialized = true
                 }
@@ -800,11 +805,19 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                         if (response.isSuccessful && response.body() != null) {
                             val login = response.body()!!
                             val tokenManager = com.example.prototipopagosoffline.utils.TokenManager(context)
-                            tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)
-                            com.example.prototipopagosoffline.utils.OfflineProvisioner(
-                                AppDatabase.getInstance(context),
-                                com.example.prototipopagosoffline.network.RetrofitClient.apiService
-                            ).provision(login)
+                            tokenManager.saveToken(login.access_token)
+                            try {
+                                com.example.prototipopagosoffline.utils.OfflineProvisioner(
+                                    AppDatabase.getInstance(context),
+                                    com.example.prototipopagosoffline.network.RetrofitClient.apiService
+                                ).provision(login)
+                                check(tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)) {
+                                    "No se pudo guardar la sesion"
+                                }
+                            } catch (error: Exception) {
+                                tokenManager.clearToken()
+                                throw error
+                            }
 
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 isLoading = false

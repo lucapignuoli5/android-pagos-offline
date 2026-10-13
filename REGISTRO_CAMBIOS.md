@@ -143,3 +143,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la ejecución contra un backend real y Android Keystore requiere dispositivo/emulador; no se contactan servicios de pago.
 - **Commit:** `feat(wallet): [TFG-F3-AN-03] aprovisionar billetera offline`
 - **Impacto académico:** conecta autenticación y autorización online previa con el pago local posterior sin Internet.
+
+## TFG-F3-AN-04 — Impedir la restauración de una sesión incompleta
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la revisión de fase detectó que un fallo después del login podía dejar un JWT persistido y habilitar el próximo inicio sin autorización local.
+- **Comportamiento anterior:** la sesión completa se guardaba antes de registrar la clave y persistir saldo/autorización.
+- **Comportamiento nuevo:** el token se guarda provisionalmente para autenticar el aprovisionamiento, se elimina ante cualquier fallo y la sesión completa se confirma solo al terminar; el arranque exige además una billetera Room existente.
+- **Decisión:** tratar login y aprovisionamiento como una transición de sesión explícita sin borrar reservas ni pendientes al cerrar sesión.
+- **Archivos:** `MainActivity.kt`, `utils/TokenManager.kt`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** restauración de sesión y almacenamiento cifrado local.
+- **Pruebas:** revisión completa de fase con pruebas JVM, ensamblado, compilación instrumentada y lint correctos sobre el árbol estable.
+- **Limitaciones:** no se pudo simular cierre forzado en un dispositivo; el control se verificó por flujo y compilación.
+- **Commit:** `fix(session): [TFG-F3-AN-04] rechazar sesiones incompletas`
+- **Impacto académico:** diferencia una autenticación obtenida de una billetera offline efectivamente aprovisionada.

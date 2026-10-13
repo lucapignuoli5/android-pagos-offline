@@ -17,6 +17,14 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La billetera debe persistir la reserva y el comprobante y poder sincronizar aunque la PC siga offline; no exigir conectividad simultánea de ambos equipos.
 - La aceptación local permanece pendiente de conciliación; verificar en el código los controles previstos en la Entrega 4 antes de declararlos implementados.
 
+## Estado implementado verificado al 13/10/2026
+
+- El contrato v2, la máquina APDU HCE, la persistencia Room 7 de solicitudes, reservas, autorizaciones y claves, y el aprovisionamiento autenticado compilan y tienen pruebas JVM.
+- La pantalla cliente recibe del POS el comercio y el importe, exige confirmación y descuenta reservas del saldo gastable; `SELECT` no genera pagos.
+- La sesión solo se restaura si conserva token, identificador y billetera local aprovisionada; cerrar sesión no elimina operaciones ni libera reservas.
+- La migración 5→7 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
+- El POS de escritorio y la interoperabilidad ACR122U siguen sin implementación en este repositorio; corresponden a la fase siguiente en el repositorio backend.
+
 ## Criterios de revisión del código
 
 - Para contratos HTTP, contrastar `network/ApiService.kt` y `network/SyncItem.kt` con `../Prototipo Pagos Offline/schemas.py` y `../Prototipo Pagos Offline/main.py`.
