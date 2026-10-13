@@ -127,8 +127,12 @@ object ProtocolV2 {
                 identifier(payload.string("offline_authorization_id"), "offline_authorization_id")
                 keyReference(payload, "pos")
                 digest(payload.string("receipt_digest"), "receipt_digest")
-                require(!timestamp(payload.string("accepted_at"), "accepted_at").isBefore(issuedAt)) {
+                val acceptedAt = timestamp(payload.string("accepted_at"), "accepted_at")
+                require(!acceptedAt.isBefore(issuedAt)) {
                     "accepted_at no puede preceder a issued_at"
+                }
+                require(!acceptedAt.isAfter(expiresAt)) {
+                    "accepted_at no puede ser posterior a expires_at"
                 }
                 require(payload.string("status") == "LOCALLY_ACCEPTED") { "Estado de acuse no soportado" }
             }

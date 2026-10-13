@@ -81,3 +81,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** estado PARCIAL hasta ejecutar una migración instrumentada desde una base v5. La confirmación humana, reserva y emisión del comprobante se completan con la persistencia de billetera; las claves POS deben aprovisionarse antes de operar.
 - **Commit:** `feat(nfc): [TFG-F1-AN-04] conectar HCE v2 con Room`
 - **Impacto académico:** cambia el estado demostrado de HCE desde cobro en selección a recepción durable de solicitudes verificadas.
+
+## TFG-F1-AN-05 — Acuse limitado por vencimiento de solicitud
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el acuse debe acreditar aceptación local durante la ventana válida de la solicitud POS.
+- **Comportamiento anterior:** Android exigía que `accepted_at` no precediera a la emisión, pero permitía que fuera posterior al vencimiento.
+- **Comportamiento nuevo:** Android rechaza todo acuse cuyo `accepted_at` sea posterior al `expires_at` firmado en la solicitud.
+- **Decisión:** aplicar en Kotlin la misma cota superior incorporada al validador Python.
+- **Archivos:** `protocol/ProtocolV2.kt`, pruebas y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** validación de `payment_ack`.
+- **Pruebas:** suite JVM Android correcta con 12 pruebas, incluido acuse un segundo posterior al vencimiento.
+- **Limitaciones:** no sustituye la comprobación física del instante de lectura.
+- **Commit:** `fix(protocol): [TFG-F1-AN-05] rechazar acuses vencidos`
+- **Impacto académico:** precisa que la aceptación local ocurre dentro de los dos minutos firmados por el POS.

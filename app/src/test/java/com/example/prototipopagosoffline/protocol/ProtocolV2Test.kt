@@ -93,6 +93,25 @@ class ProtocolV2Test {
         assertArrayEquals(data, ProtocolV2.assembleChunks(decoded))
     }
 
+    @Test
+    fun ackAfterExpiryIsRejected() {
+        val ack = JsonObject().apply {
+            addProperty("version", 2)
+            addProperty("type", "payment_ack")
+            listOf("operation_id", "merchant_id", "terminal_id", "amount_cents", "currency", "nonce", "issued_at", "expires_at").forEach { field ->
+                add(field, request[field])
+            }
+            addProperty("wallet_id", "wallet-1")
+            addProperty("offline_authorization_id", "authorization-1")
+            addProperty("pos_key_id", request["pos_key_id"].asString)
+            addProperty("pos_key_fingerprint", request["pos_key_fingerprint"].asString)
+            addProperty("receipt_digest", "0".repeat(64))
+            addProperty("accepted_at", "2026-10-13T15:02:01Z")
+            addProperty("status", "LOCALLY_ACCEPTED")
+        }
+        assertThrows(IllegalArgumentException::class.java) { ProtocolV2.validatePayload(ack) }
+    }
+
     companion object {
         private lateinit var request: JsonObject
         private lateinit var canonicalRequest: String
