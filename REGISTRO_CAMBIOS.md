@@ -127,3 +127,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se agregan todavía llamadas de aprovisionamiento.
 - **Commit:** `feat(auth): [TFG-F3-AN-02] conservar billetera del login`
 - **Impacto académico:** documenta la asociación explícita entre sesión y billetera local.
+
+## TFG-F3-AN-03 — Aprovisionar clave, saldo y autorización offline
+
+- **Fecha:** 2026-10-13
+- **Fase:** 3 — Persistencia y reservas Android
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** la reserva durable no puede operar hasta que Android registre una clave con prueba de posesión y guarde una autorización emitida por el backend.
+- **Comportamiento anterior:** el login guardaba solo el JWT y la base local carecía de datos autorizados para confirmar solicitudes POS.
+- **Comportamiento nuevo:** después del login se registra una clave P-256 de Android Keystore, se valida la respuesta, se consulta el saldo y se persiste una autorización offline; una autorización local vigente evita solicitar cupo adicional al reconectar.
+- **Decisión:** mantener el aprovisionamiento fuera del hilo de interfaz y persistir saldo/autorización en una transacción Room, con límites de $1.000 y diez pagos.
+- **Archivos:** `network/ApiService.kt`, `network/SyncItem.kt`, `database/AuthorizationDao.kt`, `utils/TokenManager.kt`, `utils/OfflineProvisioner.kt`, `utils/OfflinePaymentCoordinator.kt`, `MainActivity.kt`, pruebas y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** login v2, registro de clave, autorización offline, saldo Room y sesión cifrada local.
+- **Pruebas:** `:app:testDebugUnitTest`, `:app:assembleDebug` y `:app:compileDebugAndroidTestKotlin` correctos; la prueba JVM comprueba que la prueba de posesión vincula usuario, billetera, clave, huella e instante exactos.
+- **Limitaciones:** la ejecución contra un backend real y Android Keystore requiere dispositivo/emulador; no se contactan servicios de pago.
+- **Commit:** `feat(wallet): [TFG-F3-AN-03] aprovisionar billetera offline`
+- **Impacto académico:** conecta autenticación y autorización online previa con el pago local posterior sin Internet.

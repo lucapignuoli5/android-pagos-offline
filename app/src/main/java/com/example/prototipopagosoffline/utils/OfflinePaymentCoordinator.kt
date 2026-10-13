@@ -99,4 +99,7 @@ class OfflinePaymentCoordinator(
         )
         return material
     }
+
+    fun signWithWalletKey(alias: String, payloadBytes: ByteArray): String =
+        keyManager.sign(alias, payloadBytes)
 }

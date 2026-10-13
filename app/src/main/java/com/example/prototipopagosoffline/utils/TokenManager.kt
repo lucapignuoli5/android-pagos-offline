@@ -17,6 +17,14 @@ class TokenManager(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
+    fun saveSession(token: String, walletId: String, userId: Int) {
+        sharedPreferences.edit()
+            .putString("jwt_token", token)
+            .putString("wallet_id", walletId)
+            .putInt("user_id", userId)
+            .commit()
+    }
+
     fun saveToken(token: String) {
         sharedPreferences.edit().putString("jwt_token", token).apply()
     }
@@ -25,7 +33,11 @@ class TokenManager(context: Context) {
         return sharedPreferences.getString("jwt_token", null)
     }
 
+    fun getWalletId(): String? = sharedPreferences.getString("wallet_id", null)?.takeIf { it.isNotBlank() }
+
+    fun getUserId(): Int? = sharedPreferences.getInt("user_id", -1).takeIf { it > 0 }
+
     fun clearToken() {
-        sharedPreferences.edit().remove("jwt_token").apply()
+        sharedPreferences.edit().clear().apply()
     }
 }

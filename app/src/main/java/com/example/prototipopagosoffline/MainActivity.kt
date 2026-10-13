@@ -96,8 +96,9 @@ class MainActivity : AppCompatActivity() {
                 LaunchedEffect(Unit) {
                     val tokenManager = TokenManager(context)
                     val savedToken = tokenManager.getToken()
+                    val savedWalletId = tokenManager.getWalletId()
 
-                    if (!savedToken.isNullOrEmpty()) {
+                    if (!savedToken.isNullOrEmpty() && !savedWalletId.isNullOrEmpty()) {
                         // Si ya hay sesión guardada, entra directo offline como cliente
                         currentRole = UserRole.CLIENTE
                         currentScreen = AppScreen.HOME
@@ -176,7 +177,9 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var displayBalance by remember { mutableStateOf(PaymentState.userBalance.toDouble()) }
+    val walletId = remember { TokenManager(context).getWalletId() }
+    var confirmedBalanceCents by remember { mutableStateOf<Long?>(null) }
+    var reservedBalanceCents by remember { mutableStateOf(0L) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -186,6 +189,15 @@ fun HomeScreen(
                 if (PaymentState.recentTransactions.isEmpty()) {
                     PaymentState.recentTransactions.addAll(dbTransactions)
                 }
+            }
+        }
+    }
+
+    LaunchedEffect(walletId) {
+        if (walletId != null) {
+            AppDatabase.getInstance(context).walletDao().observeWallet(walletId).collect { wallet ->
+                confirmedBalanceCents = wallet?.confirmedBalanceCents
+                reservedBalanceCents = wallet?.reservedBalanceCents ?: 0L
             }
         }
     }
@@ -242,7 +254,9 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     // Mostramos el saldo que se actualiza dinámicamente
-                    text = "$${String.format(java.util.Locale.US, "%.2f", displayBalance)}",
+                    text = confirmedBalanceCents?.let {
+                        "$${String.format(java.util.Locale.US, "%.2f", (it - reservedBalanceCents) / 100.0)}"
+                    } ?: "Sin saldo local",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-1.5).sp
@@ -251,6 +265,13 @@ fun HomeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
+                if (reservedBalanceCents > 0) {
+                    Text(
+                        text = "Reservado pendiente: $${String.format(java.util.Locale.US, "%.2f", reservedBalanceCents / 100.0)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
                 
                 // Tarjeta Virtual (Representación visual)
                 Card(
@@ -291,14 +312,26 @@ fun HomeScreen(
                 CleanActionButton(icon = Icons.Default.Sync, label = "Actualizar", onClick = {
                     scope.launch(Dispatchers.IO) {
                         try {
-                            val response = RetrofitClient.apiService.consultarSaldo()
+                            val currentWalletId = walletId ?: error("Billetera no configurada")
+                            val response = RetrofitClient.apiService.getWalletBalance(currentWalletId)
                             withContext(Dispatchers.Main) {
                                 if (response.isSuccessful && response.body() != null) {
-                                    displayBalance = response.body()!!.saldo_real
                                     Toast.makeText(context, "Saldo actualizado", Toast.LENGTH_SHORT).show()
                                 } else {
                                     Toast.makeText(context, "Error al obtener saldo", Toast.LENGTH_SHORT).show()
                                 }
+                            }
+                            response.body()?.let { balance ->
+                                val db = AppDatabase.getInstance(context)
+                                val current = db.walletDao().getWalletById(currentWalletId)
+                                db.walletDao().insertWallet(
+                                    com.example.prototipopagosoffline.database.OfflineWallet(
+                                        id = currentWalletId,
+                                        confirmedBalanceCents = balance.confirmed_balance_cents,
+                                        reservedBalanceCents = current?.reservedBalanceCents ?: 0,
+                                        currency = balance.currency
+                                    )
+                                )
                             }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
@@ -765,9 +798,13 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                         val response = com.example.prototipopagosoffline.network.RetrofitClient.apiService.login(request)
 
                         if (response.isSuccessful && response.body() != null) {
-                            val token = response.body()!!.access_token
+                            val login = response.body()!!
                             val tokenManager = com.example.prototipopagosoffline.utils.TokenManager(context)
-                            tokenManager.saveToken(token)
+                            tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)
+                            com.example.prototipopagosoffline.utils.OfflineProvisioner(
+                                AppDatabase.getInstance(context),
+                                com.example.prototipopagosoffline.network.RetrofitClient.apiService
+                            ).provision(login)
 
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 isLoading = false

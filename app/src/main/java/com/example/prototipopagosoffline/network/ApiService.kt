@@ -18,6 +18,17 @@ interface ApiService {
     @POST("/api/login")
     suspend fun login(@Body loginRequest: LoginRequest): Response<LoginResponse>
 
+    @POST("/api/keys/register")
+    suspend fun registerKey(@Body request: KeyRegistrationRequest): Response<KeyRegistrationResponse>
+
+    @POST("/api/offline-authorizations")
+    suspend fun createOfflineAuthorization(
+        @Body request: OfflineAuthorizationRequest
+    ): Response<OfflineAuthorizationResponse>
+
+    @GET("/api/wallets/{walletId}/balance")
+    suspend fun getWalletBalance(@Path("walletId") walletId: String): Response<WalletBalanceResponse>
+
     @POST("/api/billetera/recargar")
     suspend fun recargarSaldo(@Body request: RecargaRequest): Response<RecargaResponse>
 
