@@ -65,3 +65,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** esta unidad prueba el motor con dobles en memoria; Room y `HostApduService` se conectan en la siguiente unidad.
 - **Commit:** `feat(nfc): [TFG-F1-AN-03] implementar maquina APDU v2`
 - **Impacto académico:** permite demostrar semántica de dos acercamientos e idempotencia sin atribuir resultados de hardware.
+
+## TFG-F1-AN-04 — Adaptador HCE y persistencia de intercambios
+
+- **Fecha:** 2026-10-13
+- **Fase:** 1 — Contrato criptográfico y protocolo NFC v2
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** el motor probado debe sustituir el flujo HCE que cobraba durante `SELECT` y conservar solicitudes entre activaciones.
+- **Comportamiento anterior:** el servicio dependía de saldo y monto globales, generaba el pago en `SELECT` y persistía de forma asíncrona después de responder.
+- **Comportamiento nuevo:** HCE delega cada APDU al motor v2 fuera del hilo del servicio y responde después de validar/persistir; Room conserva solicitudes, comprobantes, acuses y claves confiables mediante migración 5→6 sin caída destructiva.
+- **Decisión:** agregar tablas Room mediante migración 5→6, repositorios transaccionales y un adaptador `HostApduService` que responde solo después de persistir.
+- **Archivos:** `database/AppDatabase.kt`, `database/NfcExchange.kt`, `database/NfcExchangeDao.kt`, `protocol/RoomNfcExchangeStore.kt`, `utils/PaymentHCEService.kt`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** base Room, registro local de claves confiables y ciclo HCE.
+- **Pruebas:** `:app:testDebugUnitTest` y `:app:assembleDebug` correctos; esquema generado por Room contrastado con el SQL de migración.
+- **Limitaciones:** estado PARCIAL hasta ejecutar una migración instrumentada desde una base v5. La confirmación humana, reserva y emisión del comprobante se completan con la persistencia de billetera; las claves POS deben aprovisionarse antes de operar.
+- **Commit:** `feat(nfc): [TFG-F1-AN-04] conectar HCE v2 con Room`
+- **Impacto académico:** cambia el estado demostrado de HCE desde cobro en selección a recepción durable de solicitudes verificadas.
