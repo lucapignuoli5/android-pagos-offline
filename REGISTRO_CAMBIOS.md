@@ -174,3 +174,17 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** requiere iniciar sesión con conectividad después de registrar un POS nuevo; la revocación se refleja en la próxima actualización online.
 - **Commit:** `feat(keys): [TFG-F4-AN-01] aprovisionar claves POS confiables`
 - **Impacto académico:** completa la precondición criptográfica para que Android valide una solicitud de un POS registrado.
+
+## TFG-F4-AN-02 — Revisión de compatibilidad con el POS simulado
+
+- **Fecha:** 2026-10-13
+- **Fase:** 4 — POS de Windows
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** el cierre de fase exige comprobar que el nuevo consumidor PC/SC conserva AID, APDU, fragmentación y campos exactos de Android.
+- **Comportamiento anterior:** las instrucciones seguían presentando el POS como pendiente de implementación.
+- **Comportamiento nuevo:** se registra que el POS simulado usa el mismo contrato y que la validación física continúa pendiente.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** JVM, ensamblado, compilación de instrumentadas y lint Android correctos durante la revisión conjunta; 28 pruebas Python verifican backend/POS.
+- **Limitaciones:** no hay dispositivo Android conectado ni ACR122U.
+- **Commit:** `docs(review): [TFG-F4-AN-02] registrar compatibilidad simulada`
+- **Impacto académico:** separa compatibilidad contractual automatizada de interoperabilidad NFC física.

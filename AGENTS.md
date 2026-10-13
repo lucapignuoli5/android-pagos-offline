@@ -23,7 +23,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La pantalla cliente recibe del POS el comercio y el importe, exige confirmación y descuenta reservas del saldo gastable; `SELECT` no genera pagos.
 - La sesión solo se restaura si conserva token, identificador y billetera local aprovisionada; cerrar sesión no elimina operaciones ni libera reservas.
 - La migración 5→7 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
-- El POS de escritorio y la interoperabilidad ACR122U siguen sin implementación en este repositorio; corresponden a la fase siguiente en el repositorio backend.
+- El POS de escritorio está implementado en el repositorio backend y el flujo simulado pasa; Android descarga sus claves públicas registradas. La interoperabilidad ACR122U/HCE continúa pendiente de hardware.
 
 ## Criterios de revisión del código
 
