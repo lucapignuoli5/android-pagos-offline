@@ -415,3 +415,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** schema Room 14, compilación, migración real, Keystore y dispositivos quedan para validación agrupada.
 - **Commit:** `fix(android-state): [TFG-C3-AN-03] aislar confianza saldo e historial`
 - **Impacto académico:** completa la programación de C3 sin presentar la migración ni el recorrido móvil como comprobados.
+
+## TFG-C5-AN-03 — Exigir resolución final firmada
+
+- **Fecha:** 2026-10-14
+- **Fase:** C5
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Hallazgos:** R03 y R10; liberación o liquidación local basada solamente en estados HTTP.
+- **Anterior:** la cola v3 normalizaba `ACCEPTED` o `REJECTED` sin validar una resolución del emisor, y podía consultar el endpoint v2 durante una entrega v3 pendiente.
+- **Nuevo:** el resultado v3 transporta la resolución final firmada; Android comprueba emisor fijado, firma, participante, importe, autorización y digests de solicitud/comprobante antes de liquidar o liberar. Una resolución ausente o inválida se conserva como reintentable, y una operación v3 pendiente nunca cae al sondeo v2.
+- **Archivos:** `network/SyncItem.kt`, `sync/V2SyncRepository.kt` y `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** extensión compatible de respuesta v3 con `resolution_envelope_b64`; sin migración Room adicional.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** compilación y recorridos de pérdida/reintento quedan para validación agrupada.
+- **Commit:** `fix(sync): [TFG-C5-AN-03] exigir resolucion final firmada`
+- **Impacto académico:** la reserva solo cambia por evidencia final verificable en el flujo v3 programado.

@@ -1,6 +1,7 @@
 package com.example.prototipopagosoffline.sync
 
 import androidx.room.withTransaction
+import com.example.prototipopagosoffline.BuildConfig
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.database.NfcExchange
 import com.example.prototipopagosoffline.network.ApiService
@@ -11,6 +12,8 @@ import com.example.prototipopagosoffline.network.OfflinePaymentSyncV2Request
 import com.example.prototipopagosoffline.network.OfflinePaymentEvidenceV3
 import com.example.prototipopagosoffline.network.OfflinePaymentResultV3
 import com.example.prototipopagosoffline.network.OfflinePaymentSyncV3Request
+import com.example.prototipopagosoffline.protocol.MessageTypeV3
+import com.example.prototipopagosoffline.protocol.ProtocolV3
 import java.time.Instant
 import java.util.Base64
 
@@ -48,7 +51,10 @@ class V2SyncRepository(
                 api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(v3.map { evidenceV3(it.first, it.second) }))
             }.getOrNull()
             if (response?.isSuccessful == true && response.body() != null) {
-                received += response.body()!!.results.map(::normalizeV3)
+                val exchanges = v3.associateBy({ it.first.operationId }, { it.first })
+                received += response.body()!!.results.map { result ->
+                    normalizeV3(result, exchanges[result.operation_id])
+                }
             } else v3.forEach { scheduleRetry(it.first, "NETWORK_OR_HTTP_ERROR", instant) }
         }
 
@@ -71,7 +77,10 @@ class V2SyncRepository(
         initial: OfflinePaymentResultV2,
         instant: Long
     ): Boolean {
-        val result = if (initial.status == "PENDING_EVIDENCE") {
+        val isV3 = exchange.authorizationId?.let {
+            database.authorizationDao().getAuthorization(it)?.authorizationEnvelope != null
+        } == true
+        val result = if (initial.status == "PENDING_EVIDENCE" && !isV3) {
             val statusResponse = runCatching { api.getOfflinePaymentStatus(exchange.operationId) }.getOrNull()
             val status = statusResponse?.body()
             if (statusResponse?.isSuccessful == true) {
@@ -157,18 +166,47 @@ class V2SyncRepository(
         )
     }
 
-    private fun normalizeV3(result: OfflinePaymentResultV3): OfflinePaymentResultV2 {
+    private fun normalizeV3(result: OfflinePaymentResultV3, exchange: NfcExchange?): OfflinePaymentResultV2 {
+        val finalResolutionValid = if (result.final && result.operation_status in setOf("ACCEPTED", "REJECTED")) {
+            exchange != null && verifyResolution(result, exchange)
+        } else true
         val status = when {
             result.submission_status == "CONFLICT" -> "CONFLICT"
             result.submission_status == "INVALID_EVIDENCE" -> "CONFLICT"
             result.submission_status == "RETRYABLE_ERROR" -> "RETRYABLE_ERROR"
-            result.operation_status == "ACCEPTED" -> "ACCEPTED"
+            result.final && !finalResolutionValid -> "RETRYABLE_ERROR"
+            result.operation_status == "ACCEPTED" && result.final -> "ACCEPTED"
             result.operation_status == "REJECTED" && result.final -> "REJECTED"
             result.operation_status == "PENDING_REVIEW" -> "CONFLICT"
             else -> "PENDING_EVIDENCE"
         }
-        return OfflinePaymentResultV2(result.operation_id, status, result.code)
+        val code = if (result.final && !finalResolutionValid) "INVALID_SIGNED_RESOLUTION" else result.code
+        return OfflinePaymentResultV2(result.operation_id, status, code)
     }
+
+    private fun verifyResolution(result: OfflinePaymentResultV3, exchange: NfcExchange): Boolean = runCatching {
+        val wire = Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+        val resolution = ProtocolV3.parseSignedEnvelope(wire)
+        require(ProtocolV3.validatePayload(resolution.payload) == MessageTypeV3.PAYMENT_RESOLUTION)
+        require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank())
+        require(resolution.verify(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        require(resolution.payload["issuer_key_id"].asString == BuildConfig.ISSUER_KEY_ID)
+        require(resolution.payload["issuer_key_fingerprint"].asString ==
+            ProtocolV3.publicKeyFingerprint(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        val request = ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope)
+        val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(exchange.receiptEnvelope))
+        require(resolution.payload["operation_id"].asString == exchange.operationId)
+        require(resolution.payload["wallet_id"].asString == exchange.walletId)
+        require(resolution.payload["merchant_id"].asString == exchange.merchantId)
+        require(resolution.payload["terminal_id"].asString == exchange.terminalId)
+        require(resolution.payload["amount_cents"].asLong == exchange.amountCents)
+        require(resolution.payload["offline_authorization_id"].asString == exchange.authorizationId)
+        require(resolution.payload["request_digest"].asString == ProtocolV3.payloadDigest(request))
+        require(resolution.payload["receipt_digest"].asString == ProtocolV3.payloadDigest(receipt))
+        require(resolution.payload["authorization_digest"].asString == receipt.payload["authorization_digest"].asString)
+        require(resolution.payload["operation_status"].asString == result.operation_status)
+        true
+    }.getOrDefault(false)
 
 }
 

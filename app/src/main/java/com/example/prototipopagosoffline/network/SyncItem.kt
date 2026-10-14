@@ -98,7 +98,8 @@ data class OfflinePaymentResultV3(
     val submission_status: String,
     val operation_status: String,
     val final: Boolean,
-    val code: String?
+    val code: String?,
+    val resolution_envelope_b64: String? = null
 )
 
 data class OfflinePaymentSyncV3Response(val results: List<OfflinePaymentResultV3>)
