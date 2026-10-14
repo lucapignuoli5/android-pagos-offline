@@ -473,3 +473,15 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** requiere que el operador abra temporalmente la ventana de inventario del backend; compilación, migración y datos históricos reales quedan pendientes.
 - **Commit:** `feat(migration): [TFG-C3-AN-04] registrar inventario v2`
 - **Impacto académico:** conserva bytes y firmas históricas sin convertir pagos v2 en operaciones nuevas.
+
+## TFG-C7-DOC-03 — Registrar Room 16 y compatibilidad histórica
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** instrucciones y registro consolidado reflejan Room 16 y el inventario histórico previo a la conciliación v2.
+- **Archivos:** `AGENTS.md`, registros académicos y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** la migración, compilación y conciliación histórica permanecen pendientes.
+- **Commit:** `docs(corrections): [TFG-C7-DOC-03] registrar compatibilidad historica`
+- **Impacto académico:** evita presentar la compatibilidad programada como evidencia ejecutada.
