@@ -283,3 +283,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la interoperabilidad física exige dos dispositivos NFC compatibles y no fue ejecutada en este entorno; este flujo secundario no acredita el ACR122U principal.
 - **Commit:** `feat(nfc): [TFG-F6-AN-04] adaptar lector movil al protocolo v2`
 - **Impacto académico:** conserva el lector móvil como flujo secundario y evita presentarlo como sustituto del POS de Windows.
+
+## TFG-F6-RV-01 — Revisar integraciones y flujos secundarios
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos móviles secundarios e integraciones
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la revisión de fase detectó registro HTTP de cuerpos sensibles, precedencia incorrecta de configuración externa y una referencia literal en el acceso móvil a Mercado Pago.
+- **Comportamiento anterior:** OkHttp registraba cuerpos completos; propiedades vacías rastreadas anulaban variables de entorno; la UI podía intentar una integración externa sin una habilitación Android explícita.
+- **Comportamiento nuevo:** OkHttp no instala un interceptor de registro ni conserva esa dependencia; las variables de entorno prevalecen sobre propiedades locales, la URL HTTPS del API es externa y usa un dominio inerte por defecto, y Mercado Pago permanece deshabilitado salvo habilitación explícita sin referencias de usuario inventadas.
+- **Decisión:** eliminar el interceptor de registro, dar prioridad al entorno, externalizar la URL del API y mantener la integración externa deshabilitada por defecto también en Android.
+- **Archivos:** `app/build.gradle.kts`, `gradle/libs.versions.toml`, `gradle.properties`, `MainActivity.kt`, `network/RetrofitClient.kt`, `utils/NetworkUtils.kt`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** configuración de URL y credenciales Android, habilitación explícita de recargas externas y política de registro HTTP.
+- **Pruebas:** 24 pruebas JVM, APK debug, compilación de pruebas instrumentadas y lint Android correctos; 33 pruebas backend correctas en bases temporales. Búsquedas estáticas sin interceptor `BODY`, trazas de pila, referencia de recarga literal ni claves privadas rastreadas.
+- **Limitaciones:** la revisión automatizada no sustituye pruebas físicas entre dispositivos ni con ACR122U; las recargas externas reales no se ejecutaron y continúan fuera de la demostración.
+- **Commit:** `fix(review): [TFG-F6-RV-01] cerrar integraciones moviles seguras`
+- **Impacto académico:** permite describir los canales secundarios como implementación comprobada en código y simuladores, separada de la evidencia física pendiente.

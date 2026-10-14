@@ -23,9 +23,7 @@ object NetworkUtils {
                     }
                 }
             }
-        } catch (ex: Exception) {
-            ex.printStackTrace()
-        }
+        } catch (_: Exception) { }
         return null
     }
 }

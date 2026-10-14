@@ -26,6 +26,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La conciliación v2 usa una única cola WorkManager durable por billetera autenticada, procesa resultados individuales y conserva reservas ante evidencia pendiente, conflicto o error transitorio.
 - QR/TCP usa el contrato v2 común, mensajes canónicos y acotados, tiempos de espera y cierre de sockets; el cliente solo muestra aceptación después de persistir un acuse válido y el comercio conserva su propia cola durable.
 - El lector NFC móvil usa el mismo contrato v2 y el protocolo de dos acercamientos; compila y tiene pruebas con un transceptor simulado, pero carece de verificación entre dispositivos físicos.
+- La URL del backend y credenciales demo se reciben por configuración externa con prioridad del entorno; el valor URL rastreado es inerte. Mercado Pago está deshabilitado por defecto también en Android y no se registran cuerpos HTTP.
 - La migración 5→10 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
 - El POS de escritorio está implementado en el repositorio backend y el flujo simulado pasa; Android descarga sus claves públicas registradas. La interoperabilidad ACR122U/HCE continúa pendiente de hardware.
 

@@ -363,32 +363,39 @@ fun HomeScreen(
                     icon = Icons.Default.Refresh,
                     label = "Cargar",
                     onClick = {
-                        Toast.makeText(context, "Generando link de pago...", Toast.LENGTH_SHORT).show()
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                val request = com.example.prototipopagosoffline.network.LinkPagoRequest(
-                                    token_id = "TOKEN-USER-QR",
-                                    monto = 1 // Monto fijo para la prueba (ajustado para evitar pagos accidentales)
-                                )
-                                val response = RetrofitClient.apiService.crearLinkPago(request)
+                        if (!BuildConfig.MERCADO_PAGO_ENABLED) {
+                            Toast.makeText(
+                                context,
+                                "Las recargas externas están deshabilitadas en esta demostración.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else if (BuildConfig.DEMO_USERNAME.isBlank()) {
+                            Toast.makeText(context, "Usuario de recarga no configurado.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Generando link de pago...", Toast.LENGTH_SHORT).show()
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val request = com.example.prototipopagosoffline.network.LinkPagoRequest(
+                                        token_id = BuildConfig.DEMO_USERNAME,
+                                        monto = 1
+                                    )
+                                    val response = RetrofitClient.apiService.crearLinkPago(request)
 
-                                withContext(Dispatchers.Main) {
-                                    if (response.isSuccessful && response.body() != null) {
-                                        val url = response.body()!!.init_point
-
-                                        // Copiar al portapapeles en lugar de abrir la app
-                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                        val clip = android.content.ClipData.newPlainText("Link Mercado Pago", url)
-                                        clipboard.setPrimaryClip(clip)
-
-                                        Toast.makeText(context, "🔗 Link copiado. Abrir en incógnito.", Toast.LENGTH_LONG).show()
-                                    } else {
-                                        Toast.makeText(context, "Error al generar link", Toast.LENGTH_SHORT).show()
+                                    withContext(Dispatchers.Main) {
+                                        if (response.isSuccessful && response.body() != null) {
+                                            val url = response.body()!!.init_point
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("Link Mercado Pago", url)
+                                            clipboard.setPrimaryClip(clip)
+                                            Toast.makeText(context, "Link de pago copiado.", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "Error al generar link", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Error de conexión", Toast.LENGTH_SHORT).show()
+                                } catch (_: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "Error de conexión", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         }
