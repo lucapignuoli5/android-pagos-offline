@@ -59,3 +59,8 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Para cambios de pagos, probar según corresponda rechazo, duplicación, fallo de conexión, reintento y conservación de pendientes.
 - Para NFC/HCE, comprobar en hardware compatible ambos roles; el emulador o un build exitoso no valida el intercambio físico.
 - Informar qué flujo se verificó y qué queda pendiente; el POS de PC y la conciliación independiente están implementados, pero la interoperabilidad ACR122U/HCE requiere hardware y pruebas físicas.
+
+
+## Plan correctivo vigente
+
+La auditoría R01–R34 invalida el cierre integral previo. C0 está en preparación; v3 todavía no está implementado. Seguir las decisiones correctivas de la raíz, preservar datos v2 y registrar cada cambio antes de implementarlo. No avanzar de fase sin revisión independiente.

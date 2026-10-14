@@ -315,3 +315,21 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la ausencia comprobada de dispositivo, emulador o ACR122U impide ejecutar pruebas instrumentadas y de interoperabilidad; `local.properties` conserva una ruta SDK inexistente, compensada en las verificaciones mediante `ANDROID_HOME`.
 - **Commit:** `test(evidence): [TFG-F7-AN-01] consolidar verificacion android`
 - **Impacto académico:** diferencia evidencia de compilación/simulación de la validación física pendiente.
+
+
+## TFG-C0-AN-01 — Preparar correcciones de auditoría
+
+- **Fecha:** 2026-10-14
+- **Fase:** C0
+- **Estado:** COMPROBADO
+- **Hallazgos:** R31, R32; matriz de seguimiento R01–R34.
+- **Anterior:** cierre previo con pruebas parciales y defectos de integración diagnosticados.
+- **Nuevo previsto:** línea base explícita, verificaciones aisladas y contrato v3 planificado.
+- **Decisión:** conservar datos y evidencia v2; commits locales, sin push ni pagos reales.
+- **Base Git:** `afa7dd1`, árbol limpio antes de la unidad.
+- **Archivos:** AGENTS.md, REGISTRO_CAMBIOS.md y guía de pruebas aisladas.
+- **Contratos/datos:** ninguna migración ejecutada; v3 todavía no implementado.
+- **Pruebas:** revisión independiente C0 aprobada; estados Git y diff-check correctos; hashes de ambas bases y ambos Word conservados. Backend completa 43 pruebas con CPython 3.13.13 en base temporal y reloj histórico explícito; pyscard 2.3.1 importado sin acceder al lector. Android solo cambia guías/instrucciones y no requiere repetir el build de código.
+- **Limitaciones:** ACR122U y Android físico no disponibles.
+- **Commit:** `chore(audit): [TFG-C0-AN-01] preparar correcciones trazables`
+- **Impacto académico:** separar auditoría, implementación y evidencia; no actualizar Entrega 4.
