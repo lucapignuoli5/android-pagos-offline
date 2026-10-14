@@ -63,7 +63,7 @@ class WalletKeyManager {
     private fun sha256(value: ByteArray): String = MessageDigest.getInstance("SHA-256")
         .digest(value)
         .joinToString("") { "%02x".format(it) }
-}
     fun hasKey(alias: String): Boolean = KeyStore.getInstance(keyStoreName).apply { load(null) }
         .containsAlias(alias)
+}
 

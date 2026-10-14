@@ -85,7 +85,7 @@ class MobilePosCoordinator(
         require(ProtocolV3.validatePayload(receipt.payload) == MessageTypeV3.PAYMENT_RECEIPT)
         require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank())
         require(ProtocolV3.verifyAuthorization(
-            grant, BuildConfig.ISSUER_PUBLIC_KEY_B64, BuildConfig.ISSUER_KEY_ID
+            grant, com.example.prototipopagosoffline.protocol.IssuerTrust.publicKey(grant.payload)
         )) { "Autorizacion offline no confiable" }
         ProtocolV3.validateReceiptBinding(request, receipt, grant)
         require(!now().isAfter(Instant.parse(request.payload["expires_at"].asString))) { "Solicitud vencida" }

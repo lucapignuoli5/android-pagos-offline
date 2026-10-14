@@ -25,7 +25,9 @@ class OfflinePaymentCoordinator(
             ?: throw IllegalArgumentException("Solicitud no encontrada")
         exchange.receiptEnvelope?.let { return ConfirmationResult.AlreadyCreated(operationId, it) }
         require(exchange.state == ExchangeState.REQUEST_RECEIVED.name) { "Solicitud no disponible para confirmar" }
+        require(exchange.walletId == walletId) { "Solicitud de otra cuenta" }
         val requestV3 = runCatching { ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope) }.getOrNull()
+        require(requestV3 != null) { "No se emiten comprobantes nuevos v2" }
         val request = requestV3?.payload ?: ProtocolV2.parseSignedEnvelope(exchange.requestEnvelope).payload
         require(request["type"].asString == "payment_request")
         require(request["operation_id"].asString == operationId)
@@ -86,6 +88,10 @@ class OfflinePaymentCoordinator(
         val signature = keyManager.sign(metadata.keyStoreAlias, payloadBytes)
         val envelope = if (requestV3 != null) ProtocolV3.encodeSignedEnvelope(receipt, signature)
         else ProtocolV2.encodeSignedEnvelope(receipt, signature)
+        ProtocolV3.validateReceiptBinding(
+            requestV3, ProtocolV3.parseSignedEnvelope(envelope),
+            ProtocolV3.parseSignedEnvelope(requireNotNull(authorization.authorizationEnvelope))
+        )
 
         var created = true
         var resultingEnvelope = envelope
@@ -98,6 +104,11 @@ class OfflinePaymentCoordinator(
                 return@withTransaction
             }
             require(current.state == ExchangeState.REQUEST_RECEIVED.name)
+            require(current.walletId == walletId)
+            if (requestV3 != null) {
+                require(database.authorizationDao().getAuthorization(authorization.id)?.nextIssuanceIndex ==
+                    authorization.nextIssuanceIndex) { "Indice de emision ocupado; vuelva a confirmar" }
+            }
             require(database.walletDao().reserve(walletId, amount) == 1)
             require(database.authorizationDao().consume(authorization.id, amount, nowEpoch, expiresAt.epochSecond) == 1)
             require(

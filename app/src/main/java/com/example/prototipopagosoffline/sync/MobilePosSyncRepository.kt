@@ -114,10 +114,7 @@ class MobilePosSyncRepository(
             Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
         )
         require(ProtocolV3.validatePayload(resolution.payload) == MessageTypeV3.PAYMENT_RESOLUTION)
-        require(resolution.verify(BuildConfig.ISSUER_PUBLIC_KEY_B64))
-        require(resolution.payload["issuer_key_id"].asString == BuildConfig.ISSUER_KEY_ID)
-        require(resolution.payload["issuer_key_fingerprint"].asString ==
-            ProtocolV3.publicKeyFingerprint(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        require(resolution.verify(com.example.prototipopagosoffline.protocol.IssuerTrust.publicKey(resolution.payload)))
         val request = ProtocolV3.parseSignedEnvelope(operation.requestEnvelope)
         val grant = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.authorizationEnvelope))
         val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.receiptEnvelope))

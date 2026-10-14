@@ -396,38 +396,19 @@ fun HomeScreen(
                     icon = Icons.Default.Refresh,
                     label = "Cargar",
                     onClick = {
-                        if (!BuildConfig.MERCADO_PAGO_ENABLED) {
-                            Toast.makeText(
-                                context,
-                                "Las recargas externas están deshabilitadas en esta demostración.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else if (BuildConfig.DEMO_USERNAME.isBlank()) {
-                            Toast.makeText(context, "Usuario de recarga no configurado.", Toast.LENGTH_LONG).show()
-                        } else {
-                            Toast.makeText(context, "Generando link de pago...", Toast.LENGTH_SHORT).show()
+                        run {
+                            Toast.makeText(context, "Recarga simulada de $1.000", Toast.LENGTH_SHORT).show()
                             scope.launch(Dispatchers.IO) {
                                 try {
-                                    val request = com.example.prototipopagosoffline.network.LinkPagoRequest(
-                                        token_id = BuildConfig.DEMO_USERNAME,
-                                        monto = 1
-                                    )
-                                    val response = RetrofitClient.apiService.crearLinkPago(request)
-
+                                    com.example.prototipopagosoffline.utils.SimulatedTopupService(
+                                        context, AppDatabase.getInstance(context), RetrofitClient.apiService
+                                    ).addDemoCredit()
                                     withContext(Dispatchers.Main) {
-                                        if (response.isSuccessful && response.body() != null) {
-                                            val url = response.body()!!.init_point
-                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                            val clip = android.content.ClipData.newPlainText("Link Mercado Pago", url)
-                                            clipboard.setPrimaryClip(clip)
-                                            Toast.makeText(context, "Link de pago copiado.", Toast.LENGTH_LONG).show()
-                                        } else {
-                                            Toast.makeText(context, "Error al generar link", Toast.LENGTH_SHORT).show()
-                                        }
+                                        Toast.makeText(context, "Recarga simulada acreditada", Toast.LENGTH_SHORT).show()
                                     }
                                 } catch (_: Exception) {
                                     withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, "Error de conexión", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Recarga pendiente: reintente con Internet", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -661,22 +642,24 @@ fun ClientScreen(
     val scope = rememberCoroutineScope()
 
     val nfcAdapter = android.nfc.NfcAdapter.getDefaultAdapter(context)
-    val cardEmulation = android.nfc.cardemulation.CardEmulation.getInstance(nfcAdapter)
+    val cardEmulation = nfcAdapter?.let { android.nfc.cardemulation.CardEmulation.getInstance(it) }
     val componentName = android.content.ComponentName(context, com.example.prototipopagosoffline.utils.PaymentHCEService::class.java)
 
     androidx.compose.runtime.DisposableEffect(Unit) {
         if (nfcAdapter != null && nfcAdapter.isEnabled) {
-            cardEmulation.setPreferredService(context as android.app.Activity, componentName)
+            cardEmulation?.setPreferredService(context as android.app.Activity, componentName)
         }
         onDispose {
             if (nfcAdapter != null && nfcAdapter.isEnabled) {
-                cardEmulation.unsetPreferredService(context as android.app.Activity)
+                cardEmulation?.unsetPreferredService(context as android.app.Activity)
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        database.nfcExchangeDao().observeOldestPendingRequest().collect { pending = it }
+        walletId?.let { account ->
+            database.nfcExchangeDao().observeOldestPendingRequest(account).collect { pending = it }
+        }
     }
 
     Column(
@@ -705,7 +688,11 @@ fun ClientScreen(
         if (pending == null) {
             Text("Acercá el teléfono al POS para recibir una solicitud.", style = MaterialTheme.typography.bodyLarge)
         } else {
-            val request = runCatching { com.example.prototipopagosoffline.protocol.ProtocolV2.parseSignedEnvelope(pending!!.requestEnvelope).payload }.getOrNull()
+            val request = runCatching {
+                com.example.prototipopagosoffline.protocol.ProtocolV3.parseSignedEnvelope(pending!!.requestEnvelope).payload
+            }.getOrElse {
+                runCatching { com.example.prototipopagosoffline.protocol.ProtocolV2.parseSignedEnvelope(pending!!.requestEnvelope).payload }.getOrNull()
+            }
             Text("Comercio: ${request?.get("merchant_id")?.asString ?: "desconocido"}", style = MaterialTheme.typography.titleMedium)
             Text("Importe: $${String.format(java.util.Locale.US, "%.2f", (request?.get("amount_cents")?.asLong ?: 0L) / 100.0)}", style = MaterialTheme.typography.headlineSmall)
             Spacer(modifier = Modifier.height(24.dp))
@@ -820,7 +807,8 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                             try {
                                 com.example.prototipopagosoffline.utils.OfflineProvisioner(
                                     AppDatabase.getInstance(context),
-                                    com.example.prototipopagosoffline.network.RetrofitClient.apiService
+                                    com.example.prototipopagosoffline.network.RetrofitClient.apiService,
+                                    requestStore = tokenManager
                                 ).provision(login)
                                 check(tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)) {
                                     "No se pudo guardar la sesion"

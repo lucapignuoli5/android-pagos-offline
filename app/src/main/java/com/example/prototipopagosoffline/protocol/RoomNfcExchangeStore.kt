@@ -5,7 +5,10 @@ import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.database.NfcExchange
 import java.time.Instant
 
-class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore {
+class RoomNfcExchangeStore(
+    private val database: AppDatabase,
+    private val walletId: () -> String? = { null }
+) : NfcExchangeStore {
     private val dao = database.nfcExchangeDao()
 
     override suspend fun saveRequest(operationId: String, signedEnvelope: ByteArray): SaveResult =
@@ -13,8 +16,10 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
             val existing = dao.getExchange(operationId)
             when {
                 existing == null -> {
-                    val expiresAt = ProtocolV2.parseSignedEnvelope(signedEnvelope)
-                        .payload["expires_at"]?.asString
+                    val account = walletId() ?: throw IllegalStateException("Billetera no autenticada")
+                    val payload = runCatching { ProtocolV3.parseSignedEnvelope(signedEnvelope).payload }
+                        .getOrElse { ProtocolV2.parseSignedEnvelope(signedEnvelope).payload }
+                    val expiresAt = payload["expires_at"]?.asString
                         ?.let(Instant::parse)
                         ?.epochSecond
                     dao.insertExchange(
@@ -23,12 +28,13 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
                             requestEnvelope = signedEnvelope,
                             state = ExchangeState.REQUEST_RECEIVED.name,
                             createdAtEpochSeconds = System.currentTimeMillis() / 1000,
-                            requestExpiresAtEpochSeconds = expiresAt
+                            requestExpiresAtEpochSeconds = expiresAt,
+                            walletId = account
                         )
                     )
                     SaveResult.INSERTED
                 }
-                existing.requestEnvelope.contentEquals(signedEnvelope) -> SaveResult.IDENTICAL
+                existing.walletId == walletId() && existing.requestEnvelope.contentEquals(signedEnvelope) -> SaveResult.IDENTICAL
                 else -> SaveResult.CONFLICT
             }
         }

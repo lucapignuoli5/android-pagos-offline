@@ -23,7 +23,9 @@ class PaymentHCEService : HostApduService() {
     private val activationGeneration = AtomicLong(0)
     private val engine: NfcProtocolEngine by lazy {
         val database = AppDatabase.getInstance(applicationContext)
-        NfcProtocolEngine(RoomNfcExchangeStore(database), RoomTrustedPublicKeyResolver(database))
+        NfcProtocolEngine(RoomNfcExchangeStore(database) {
+            TokenManager(applicationContext).getWalletId()
+        }, RoomTrustedPublicKeyResolver(database))
     }
 
     override fun processCommandApdu(commandApdu: ByteArray?, extras: Bundle?): ByteArray? {
@@ -31,7 +33,9 @@ class PaymentHCEService : HostApduService() {
         val generation = activationGeneration.get()
         serviceScope.launch {
             val response = apduMutex.withLock {
-                val response = engine.process(command)
+                if (generation != activationGeneration.get()) return@withLock null
+                val response = try { engine.process(command) }
+                    catch (_: Exception) { ProtocolV2.SW_BAD_DATA }
                 if (generation != activationGeneration.get()) return@withLock null
                 sendResponseApdu(response)
                 response

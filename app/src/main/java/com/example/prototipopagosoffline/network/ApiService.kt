@@ -63,8 +63,8 @@ interface ApiService {
         @Path("operationId") operationId: String
     ): Response<OfflinePaymentStatusResponse>
 
-    @POST("/api/billetera/recargar")
-    suspend fun recargarSaldo(@Body request: RecargaRequest): Response<RecargaResponse>
+    @POST("/api/v3/simulated-topups")
+    suspend fun simulatedTopup(@Body request: SimulatedTopupRequest): Response<SimulatedTopupResponse>
 
     @GET("/api/billetera/saldo")
     suspend fun consultarSaldo(): Response<SaldoResponse>

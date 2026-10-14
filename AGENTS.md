@@ -64,3 +64,12 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 ## Plan correctivo vigente
 
 La auditoría R01–R34 invalida el cierre integral previo. La programación C3 llegó a Room 16, confianza por alcance, historial por cuenta, reservas preservadas, resoluciones finales firmadas e inventario durable de comprobantes v2. HCE, QR/TCP y lector NFC móvil producen v3; v2 queda para recuperación histórica controlada. Su compilación y ejecución integral permanecen pendientes. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar compilación, migración, dispositivo o hardware como comprobados mientras no se ejecuten.
+
+## Corte C8 para prueba manual
+
+- `assembleDebug` y `assembleDebugAndroidTest` terminaron correctamente tras las correcciones; no se ejecutaron pruebas ni lint.
+- Room 16 y su esquema exportado se conservan. Solicitudes nuevas v3 se vinculan a cuenta local y NFC admite GET_AUTHORIZATION 0x50.
+- Cargar acredita $1.000 simulados mediante v3 e ID durable; no utiliza Mercado Pago.
+- La confianza emisora puede incluir inventario público histórico fijado por configuración externa; nunca se aprende automáticamente por HTTP.
+- El APK de verificación usa URL inerte y credenciales vacías. Para operar, el usuario debe preparar una demostración nueva y recompilar mediante `tools.run_demo android` del backend.
+- Este corte acredita compilación, no migración Room, Keystore, pagos, transporte físico o contabilidad.

@@ -367,7 +367,7 @@ object ProtocolV2 {
         }
     }
 
-    private fun supportedInstructions() = setOf(INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK)
+    private fun supportedInstructions() = setOf(INS_PUT_REQUEST, INS_GET_STATUS, INS_GET_RECEIPT, INS_PUT_ACK, ProtocolV3.INS_GET_AUTHORIZATION)
 
     private fun hex(value: String): ByteArray = value.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

@@ -128,7 +128,7 @@ class V2SyncRepository(
         val amount = exchange.amountCents ?: return retryInvalid(exchange, now().epochSecond)
         return database.withTransaction {
             check(database.walletDao().releaseReservation(walletId, amount) == 1)
-            check(database.authorizationDao().restore(authorizationId, amount) == 1)
+            // An issued index is permanent: a rejection releases only its local reservation.
             check(database.nfcExchangeDao().finishSync(exchange.operationId, "REJECTED", code) == 1)
             true
         }
@@ -189,10 +189,7 @@ class V2SyncRepository(
         val resolution = ProtocolV3.parseSignedEnvelope(wire)
         require(ProtocolV3.validatePayload(resolution.payload) == MessageTypeV3.PAYMENT_RESOLUTION)
         require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank())
-        require(resolution.verify(BuildConfig.ISSUER_PUBLIC_KEY_B64))
-        require(resolution.payload["issuer_key_id"].asString == BuildConfig.ISSUER_KEY_ID)
-        require(resolution.payload["issuer_key_fingerprint"].asString ==
-            ProtocolV3.publicKeyFingerprint(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        require(resolution.verify(com.example.prototipopagosoffline.protocol.IssuerTrust.publicKey(resolution.payload)))
         val request = ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope)
         val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(exchange.receiptEnvelope))
         require(resolution.payload["operation_id"].asString == exchange.operationId)

@@ -10,7 +10,7 @@ interface AuthorizationDao {
     @Query("SELECT * FROM local_offline_authorizations WHERE id = :authorizationId LIMIT 1")
     suspend fun getAuthorization(authorizationId: String): LocalOfflineAuthorization?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun upsertAuthorization(authorization: LocalOfflineAuthorization)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)

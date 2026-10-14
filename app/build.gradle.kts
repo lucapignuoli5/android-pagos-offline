@@ -69,6 +69,7 @@ android {
             .replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "ISSUER_PUBLIC_KEY_B64", "\"${configuredString("ISSUER_PUBLIC_KEY_B64")}\"")
         buildConfigField("String", "ISSUER_KEY_ID", "\"${configuredString("ISSUER_KEY_ID")}\"")
+        buildConfigField("String", "ISSUER_TRUST_JSON", "\"${configuredString("ISSUER_TRUST_JSON")}\"")
     }
 
     buildTypes {

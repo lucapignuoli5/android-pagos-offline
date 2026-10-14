@@ -68,7 +68,7 @@ fun PagarQrScreen(
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val database = remember { AppDatabase.getInstance(context) }
-    val store = remember { RoomNfcExchangeStore(database) }
+    val store = remember { RoomNfcExchangeStore(database) { TokenManager(context).getWalletId() } }
     val exchangeService = remember {
         ClientPaymentExchangeService(store, RoomTrustedPublicKeyResolver(database, "pos"))
     }

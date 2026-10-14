@@ -54,6 +54,20 @@ class TokenManager(context: Context) {
     fun getTerminalId(): String? = sharedPreferences.getString("terminal_id", null)?.takeIf { it.isNotBlank() }
 
     fun clearToken() {
-        sharedPreferences.edit().clear().commit()
+        sharedPreferences.edit().remove("jwt_token").remove("wallet_id").remove("user_id")
+            .remove("session_role").remove("terminal_id").commit()
+    }
+
+    @Synchronized
+    fun pendingRequestId(kind: String, walletId: String): String {
+        val name = "pending_request:$kind:$walletId"
+        sharedPreferences.getString(name, null)?.let { return it }
+        val id = java.util.UUID.randomUUID().toString()
+        check(sharedPreferences.edit().putString(name, id).commit())
+        return id
+    }
+
+    fun completeRequest(kind: String, walletId: String) {
+        check(sharedPreferences.edit().remove("pending_request:$kind:$walletId").commit())
     }
 }

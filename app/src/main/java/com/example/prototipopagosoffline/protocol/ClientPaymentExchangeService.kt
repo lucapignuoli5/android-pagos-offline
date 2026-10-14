@@ -39,6 +39,9 @@ class ClientPaymentExchangeService(
         ) ?: throw IllegalStateException("Clave POS no confiable")
         require(envelope.verify(publicKey)) { "Firma POS invalida" }
         val operationId = envelope.payload["operation_id"].asString
+        require(store.getRequest(operationId)?.contentEquals(data) == true) {
+            "Las solicitudes nuevas requieren v3; v2 solo recupera operaciones existentes"
+        }
         require(store.saveRequest(operationId, data) != SaveResult.CONFLICT) {
             "operation_id repetido con otra solicitud"
         }

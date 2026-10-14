@@ -485,3 +485,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la migración, compilación y conciliación histórica permanecen pendientes.
 - **Commit:** `docs(corrections): [TFG-C7-DOC-03] registrar compatibilidad historica`
 - **Impacto académico:** evita presentar la compatibilidad programada como evidencia ejecutada.
+## TFG-C8-AN-01 — Preparación para prueba manual
+
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Requisito: corregir bloqueos de compilación, APDU v3, aprovisionamiento y recuperación.
+- Validación autorizada: solo compilación Android y sintaxis Python; sin pruebas ni arranque.
+- Datos existentes: conservar; configuración y demostración nuevas fuera de Git.
+- Anterior: hasKey fuera de clase impedía compilar; APDU 0x50 rechazado; Room/UI leían solicitudes v3 como v2; botón de recarga dependía de integración externa.
+- Nuevo: claves compilan; NFC transmite autorización; solicitudes vinculadas a cuenta y parseadas por versión; recarga simulada autenticada de $1.000 con UUID durable; trust histórico fijado; reservas e índices no se rehabilitan por rechazo; sockets se cierran por plazo/cancelación.
+- Archivos: `MainActivity.kt`, entidades/DAO afectados, DTO/API, `ProtocolV2.kt`, `ClientPaymentExchangeService.kt`, `RoomNfcExchangeStore.kt`, `IssuerTrust.kt`, `QrTcpProtocol.kt`, repositorios sync, coordinadores, provisioner, TokenManager, WalletKeyManager, PaymentHCEService, SimulatedTopupService, Gradle y schema Room 16.
+- Datos: conserva Room 16 y migraciones 5→16; autorización existente se inserta con IGNORE para no restablecer consumos; solicitud de autorización y recarga mantienen UUID por cuenta ante respuesta perdida.
+- Entorno: SDK local corregido en archivo ignorado; JBR 21. `assembleDebug` y `assembleDebugAndroidTest` correctos tras cambios finales; schema Room 16 exportado. Avisos de deprecación y condiciones redundantes no impiden compilar.
+- Pruebas: ninguna ejecutada; instrumentadas solo se compilan.
+- Limitaciones: compilación con configuración inerte mientras el usuario proporciona URL; Keystore, Room, dos teléfonos, contabilidad y hardware pendientes.
+- Commit: `fix(manual): [TFG-C8-AN-01] preparar ejecucion controlada`.
+- Impacto académico: habilita preparación manual sin convertir compilación en evidencia de pagos.

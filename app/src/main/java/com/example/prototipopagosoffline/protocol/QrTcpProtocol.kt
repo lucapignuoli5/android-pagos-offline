@@ -19,6 +19,10 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import com.example.prototipopagosoffline.utils.MobilePosCoordinator
 
 data class QrPaymentDescriptor(
@@ -256,7 +260,7 @@ class QrTcpClient(
     suspend fun deliver(descriptor: QrPaymentDescriptor, receiptEnvelope: ByteArray): ByteArray {
         val receipt = ProtocolV3.parseSignedEnvelope(receiptEnvelope)
         require(receipt.payload["operation_id"].asString == descriptor.operationId)
-        return withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) { Socket().use { socket ->
+        return Socket().use { socket -> socketDeadline(socket) {
             socket.connect(
                 InetSocketAddress(descriptor.host, descriptor.port),
                 QrTcpProtocol.CONNECT_TIMEOUT_MILLIS
@@ -301,7 +305,7 @@ class QrTcpServer(
                 }
                 socket.use { client ->
                     try {
-                        withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) {
+                        socketDeadline(client) {
                             client.soTimeout = QrTcpProtocol.SOCKET_TIMEOUT_MILLIS
                             client.tcpNoDelay = true
                             val (authorizationOperationId, authorization) = QrTcpProtocol.decodeAuthorization(
@@ -327,4 +331,13 @@ class QrTcpServer(
             }
         }
     }
+}
+
+/** Closing the socket interrupts blocking IO even under byte trickle or cancellation. */
+private suspend fun <T> socketDeadline(socket: Socket, block: suspend () -> T): T = coroutineScope {
+    val watchdog = launch(Dispatchers.IO) {
+        try { delay(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) }
+        finally { socket.close() }
+    }
+    try { block() } finally { watchdog.cancel() }
 }

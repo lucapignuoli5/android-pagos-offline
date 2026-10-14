@@ -26,6 +26,10 @@ data class LoginResponse(
 
 data class RecargaRequest(val token_id: String, val monto_recarga: Double)
 data class RecargaResponse(val exitoso: Boolean, val nuevo_saldo: Double)
+data class SimulatedTopupRequest(val request_id: String, val wallet_id: String, val amount_cents: Long)
+data class SimulatedTopupResponse(
+    val request_id: String, val wallet_id: String, val amount_cents: Long, val confirmed_balance_cents: Long
+)
 
 data class SaldoResponse(
     val usuario: String,

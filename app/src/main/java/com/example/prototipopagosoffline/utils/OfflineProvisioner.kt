@@ -27,7 +27,8 @@ class OfflineProvisioner(
     private val database: AppDatabase,
     private val api: ApiService,
     private val paymentCoordinator: OfflinePaymentCoordinator = OfflinePaymentCoordinator(database),
-    private val now: () -> Instant = { Instant.now() }
+    private val now: () -> Instant = { Instant.now() },
+    private val requestStore: TokenManager? = null
 ) {
     suspend fun provision(login: LoginResponse) {
         require(login.wallet_id.isNotBlank())
@@ -84,7 +85,7 @@ class OfflineProvisioner(
         }
         val authorizationResponse = api.createOfflineAuthorizationV3(
             OfflineAuthorizationRequest(
-                request_id = UUID.nameUUIDFromBytes(
+                request_id = requestStore?.pendingRequestId("authorization", login.wallet_id) ?: UUID.nameUUIDFromBytes(
                     "${login.wallet_id}:${key.keyId}:${now().epochSecond / 86400}".toByteArray(Charsets.UTF_8)
                 ).toString(),
                 wallet_id = login.wallet_id,
@@ -97,7 +98,8 @@ class OfflineProvisioner(
         val authorization = requireNotNull(authorizationResponse.body()) { "Respuesta de autorizacion vacia" }
         val grantBytes = Base64.getDecoder().decode(authorization.authorization_envelope_b64)
         val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
-        require(ProtocolV3.verifyAuthorization(grant, BuildConfig.ISSUER_PUBLIC_KEY_B64, BuildConfig.ISSUER_KEY_ID))
+        require(ProtocolV3.verifyAuthorization(grant,
+            com.example.prototipopagosoffline.protocol.IssuerTrust.publicKey(grant.payload)))
         val payload = grant.payload
         require(payload["authorization_id"].asString == authorization.authorization_id)
         require(payload["wallet_id"].asString == login.wallet_id)
@@ -120,6 +122,7 @@ class OfflineProvisioner(
                 )
             )
         }
+        requestStore?.completeRequest("authorization", login.wallet_id)
     }
 
     private suspend fun saveWallet(confirmedBalance: Long, walletId: String) {
