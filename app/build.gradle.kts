@@ -20,6 +20,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
 
         val demoUsername = providers.environmentVariable("DEMO_USERNAME")
             .orElse(providers.gradleProperty("DEMO_USERNAME"))
@@ -73,6 +74,12 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            if (providers.environmentVariable("DEMO_ISOLATED_INSTALL").orElse("false").get().toBoolean()) {
+                applicationIdSuffix = ".manual"
+                manifestPlaceholders["appLabel"] = "Pagos Offline Demo"
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

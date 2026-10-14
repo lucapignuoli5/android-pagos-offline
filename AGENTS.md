@@ -73,3 +73,10 @@ La auditoría R01–R34 invalida el cierre integral previo. La programación C3 
 - La confianza emisora puede incluir inventario público histórico fijado por configuración externa; nunca se aprende automáticamente por HTTP.
 - El APK de verificación usa URL inerte y credenciales vacías. Para operar, el usuario debe preparar una demostración nueva y recompilar mediante `tools.run_demo android` del backend.
 - Este corte acredita compilación, no migración Room, Keystore, pagos, transporte físico o contabilidad.
+
+El corte C8-AN-02 compila la configuración real de demostración con dominio fijo
+`unfailing-bless-thrift.ngrok-free.dev` y emisor DPAPI externo correspondiente.
+`tools.run_demo android` activa DEMO_ISOLATED_INSTALL: suffix `.manual` y label
+Pagos Offline Demo. Es el mismo código con instalación separada para conservar
+la app original. Actualizar del cliente también encola conciliación. No se
+ejecutaron pagos, dispositivos ni instrumentadas.

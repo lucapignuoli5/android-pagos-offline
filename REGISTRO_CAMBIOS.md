@@ -500,3 +500,15 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Limitaciones: compilación con configuración inerte mientras el usuario proporciona URL; Keystore, Room, dos teléfonos, contabilidad y hardware pendientes.
 - Commit: `fix(manual): [TFG-C8-AN-01] preparar ejecucion controlada`.
 - Impacto académico: habilita preparación manual sin convertir compilación en evidencia de pagos.
+## TFG-C8-AN-02 — APK configurado para demostración manual
+
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Requisito: compilar con dominio fijo, credenciales demo externas e identidad emisora correspondiente.
+- Verificación: solo compilación; no pagos ni pruebas.
+- Commit: `feat(demo): [TFG-C8-AN-02] aislar apk de demostracion`.
+- Decisión: build debug opcional aislado `.manual` activado únicamente por launcher demo; mismo código y contrato, datos separados de la instalación anterior.
+- Archivos: app/build.gradle.kts, AndroidManifest.xml, registro e instrucciones; credenciales y claves de preparación permanecen fuera de Git.
+- MainActivity: Actualizar también encola conciliación de cliente; mensaje de sincronización sin versión técnica.
+- Configuración real: dominio fijo y cuentas/identidad de la base externa nueva. Valores sensibles nunca se incluyen en registros.
+- Verificación: assembleDebug y assembleDebugAndroidTest correctos; valores de configuración comprobados por presencia sin imprimir credenciales. Instrumentadas no ejecutadas.
+- Datos: misma versión Room 16, sin alteración de bytes históricos ni bases originales; APK demo en carpeta externa.
