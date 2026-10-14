@@ -31,8 +31,20 @@ interface NfcExchangeDao {
     @Query("UPDATE nfc_exchanges SET state = 'DELIVERY_UNCERTAIN' WHERE operation_id = :operationId AND state = 'RESERVED'")
     suspend fun markDeliveryStarted(operationId: String): Int
 
-    @Query("UPDATE nfc_exchanges SET ack_envelope = :ack, state = 'LOCALLY_ACCEPTED' WHERE operation_id = :operationId AND state IN ('RESERVED', 'DELIVERY_UNCERTAIN')")
+    @Query("UPDATE nfc_exchanges SET ack_envelope = :ack, state = 'LOCALLY_ACCEPTED', next_sync_at_epoch_seconds = NULL, last_sync_code = NULL WHERE operation_id = :operationId AND state IN ('RESERVED', 'DELIVERY_UNCERTAIN')")
     suspend fun setAck(operationId: String, ack: ByteArray): Int
+
+    @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId AND receipt_envelope IS NOT NULL AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED') AND (next_sync_at_epoch_seconds IS NULL OR next_sync_at_epoch_seconds <= :now) ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
+    suspend fun getSyncCandidates(walletId: String, now: Long, limit: Int = 100): List<NfcExchange>
+
+    @Query("SELECT MIN(COALESCE(next_sync_at_epoch_seconds, 0)) FROM nfc_exchanges WHERE wallet_id = :walletId AND receipt_envelope IS NOT NULL AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
+    suspend fun getNextSyncAt(walletId: String): Long?
+
+    @Query("UPDATE nfc_exchanges SET sync_attempts = sync_attempts + 1, next_sync_at_epoch_seconds = :nextAttempt, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
+    suspend fun scheduleRetry(operationId: String, nextAttempt: Long, code: String?): Int
+
+    @Query("UPDATE nfc_exchanges SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
+    suspend fun finishSync(operationId: String, state: String, code: String?): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)

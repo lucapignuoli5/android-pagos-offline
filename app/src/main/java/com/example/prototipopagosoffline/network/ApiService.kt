@@ -32,6 +32,16 @@ interface ApiService {
     @GET("/api/wallets/{walletId}/balance")
     suspend fun getWalletBalance(@Path("walletId") walletId: String): Response<WalletBalanceResponse>
 
+    @POST("/api/offline-payments/sync")
+    suspend fun syncOfflinePaymentsV2(
+        @Body request: OfflinePaymentSyncV2Request
+    ): Response<OfflinePaymentSyncV2Response>
+
+    @GET("/api/offline-payments/{operationId}")
+    suspend fun getOfflinePaymentStatus(
+        @Path("operationId") operationId: String
+    ): Response<OfflinePaymentStatusResponse>
+
     @POST("/api/billetera/recargar")
     suspend fun recargarSaldo(@Body request: RecargaRequest): Response<RecargaResponse>
 

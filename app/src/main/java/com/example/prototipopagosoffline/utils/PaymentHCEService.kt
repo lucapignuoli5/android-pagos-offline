@@ -7,6 +7,7 @@ import com.example.prototipopagosoffline.protocol.NfcProtocolEngine
 import com.example.prototipopagosoffline.protocol.ProtocolV2
 import com.example.prototipopagosoffline.protocol.RoomNfcExchangeStore
 import com.example.prototipopagosoffline.protocol.RoomTrustedPublicKeyResolver
+import com.example.prototipopagosoffline.sync.SyncManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +24,14 @@ class PaymentHCEService : HostApduService() {
     override fun processCommandApdu(commandApdu: ByteArray?, extras: Bundle?): ByteArray? {
         val command = commandApdu?.copyOf() ?: return ProtocolV2.SW_BAD_DATA
         serviceScope.launch {
-            sendResponseApdu(engine.process(command))
+            val response = engine.process(command)
+            sendResponseApdu(response)
+            val completedAck = command.size >= 5 &&
+                (command[1].toInt() and 0xff) == ProtocolV2.INS_PUT_ACK &&
+                (command[3].toInt() and 0xff) == ProtocolV2.P2_LAST &&
+                response.size >= 2 &&
+                response.copyOfRange(response.size - 2, response.size).contentEquals(ProtocolV2.SW_OK)
+            if (completedAck) SyncManager.enqueueSync(applicationContext)
         }
         return null
     }

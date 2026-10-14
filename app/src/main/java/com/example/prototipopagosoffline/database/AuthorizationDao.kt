@@ -24,4 +24,7 @@ interface AuthorizationDao {
 
     @Query("UPDATE local_offline_authorizations SET remaining_amount_cents = remaining_amount_cents - :amount, remaining_payments = remaining_payments - 1 WHERE id = :authorizationId AND active = 1 AND issued_at_epoch_seconds <= :now AND expires_at_epoch_seconds >= :expiresAt AND max_payment_cents >= :amount AND remaining_amount_cents >= :amount AND remaining_payments > 0")
     suspend fun consume(authorizationId: String, amount: Long, now: Long, expiresAt: Long): Int
+
+    @Query("UPDATE local_offline_authorizations SET remaining_amount_cents = remaining_amount_cents + :amount, remaining_payments = remaining_payments + 1 WHERE id = :authorizationId")
+    suspend fun restore(authorizationId: String, amount: Long): Int
 }

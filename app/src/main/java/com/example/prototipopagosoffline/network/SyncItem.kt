@@ -80,3 +80,26 @@ data class WalletBalanceResponse(
     val authorized_offline_cents: Long,
     val available_for_authorization_cents: Long
 )
+
+data class OfflinePaymentEvidence(
+    val operation_id: String,
+    val request_envelope_b64: String,
+    val receipt_envelope_b64: String,
+    val ack_envelope_b64: String?
+)
+
+data class OfflinePaymentSyncV2Request(val operations: List<OfflinePaymentEvidence>)
+
+data class OfflinePaymentResultV2(
+    val operation_id: String,
+    val status: String,
+    val code: String?
+)
+
+data class OfflinePaymentSyncV2Response(val results: List<OfflinePaymentResultV2>)
+
+data class OfflinePaymentStatusResponse(
+    val operation_id: String,
+    val status: String,
+    val code: String?
+)

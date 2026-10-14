@@ -188,3 +188,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no hay dispositivo Android conectado ni ACR122U.
 - **Commit:** `docs(review): [TFG-F4-AN-02] registrar compatibilidad simulada`
 - **Impacto académico:** separa compatibilidad contractual automatizada de interoperabilidad NFC física.
+
+## TFG-F5-AN-01 — Conciliación v2 única y por resultado
+
+- **Fecha:** 2026-10-14
+- **Fase:** 5 — Conciliación independiente
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** WorkManager y la sincronización manual usaban el contrato heredado y marcaban todo el lote como sincronizado ante cualquier HTTP exitoso.
+- **Comportamiento anterior:** no enviaban sobres v2 ni distinguían `ACCEPTED`, `REJECTED`, `CONFLICT`, `PENDING_EVIDENCE` y errores transitorios.
+- **Comportamiento nuevo:** la cola durable envía solicitud, comprobante y acuse v2; valida un resultado conocido por operación; consulta el estado de evidencia pendiente; concilia aceptación o rechazo en transacciones Room y conserva la reserva ante conflicto o error transitorio. La sincronización manual, el inicio de sesión, el arranque y HCE programan el mismo worker.
+- **Decisión:** usar `nfc_exchanges` como cola durable, limitar cada ejecución a la billetera autenticada, aplicar cada resultado en una transacción Room y reintentar solo estados transitorios con espera exponencial.
+- **Archivos:** `MainActivity.kt`, `database/AppDatabase.kt`, `database/AuthorizationDao.kt`, `database/NfcExchange.kt`, `database/NfcExchangeDao.kt`, `database/WalletDao.kt`, `network/ApiService.kt`, `network/SyncItem.kt`, `sync/SyncManager.kt`, `sync/SyncWorker.kt`, `sync/V2SyncRepository.kt`, `utils/PaymentHCEService.kt`, esquema Room 8, pruebas y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** endpoints v2 de sincronización/estado/saldo, estados `SYNCED`, `REJECTED` y `CONFLICT`, reserva y autorización local, Room 7→8.
+- **Pruebas:** 16 pruebas JVM correctas; APK debug, compilación de pruebas instrumentadas y lint correctos con JBR 21 y SDK 36.1. La revisión corrigió el alcance por billetera, la validación del ID consultado y la coherencia del valor predeterminado de la migración.
+- **Limitaciones:** la prueba de migración instrumentada compiló pero no pudo ejecutarse por falta de dispositivo/emulador; operaciones QR/TCP heredadas se adaptan en la Fase 6.
+- **Commit:** `feat(sync): [TFG-F5-AN-01] conciliar operaciones v2 por resultado`
+- **Impacto académico:** implementa la conciliación independiente y conserva reservas hasta un resultado verificable.

@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LocalOfflineAuthorization::class,
         WalletKeyMetadata::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -43,7 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .build().also { instance = it }
             }
         }
@@ -73,6 +73,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_local_offline_authorizations_wallet_key_id ON local_offline_authorizations(wallet_key_id)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS wallet_key_metadata (key_id TEXT NOT NULL PRIMARY KEY, wallet_id TEXT NOT NULL, keystore_alias TEXT NOT NULL, public_key_b64 TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL, retired INTEGER NOT NULL)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_wallet_key_metadata_wallet_id ON wallet_key_metadata(wallet_id)")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN sync_attempts INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN next_sync_at_epoch_seconds INTEGER")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN last_sync_code TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_nfc_exchanges_next_sync_at_epoch_seconds ON nfc_exchanges(next_sync_at_epoch_seconds)")
             }
         }
     }

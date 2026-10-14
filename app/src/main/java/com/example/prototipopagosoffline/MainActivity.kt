@@ -65,10 +65,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.prototipopagosoffline.database.AppDatabase
-import com.example.prototipopagosoffline.database.SyncState
 import com.example.prototipopagosoffline.database.TransactionHistory
 import com.example.prototipopagosoffline.network.RetrofitClient
-import com.example.prototipopagosoffline.network.SyncItem
 import com.example.prototipopagosoffline.ui.screens.CobroQrScreen
 import com.example.prototipopagosoffline.ui.screens.PagarQrScreen
 import com.example.prototipopagosoffline.ui.theme.PrototipoPagosOfflineTheme
@@ -103,6 +101,7 @@ class MainActivity : AppCompatActivity() {
                     } == true
                     if (!savedToken.isNullOrEmpty() && hasLocalWallet) {
                         // Si ya hay sesión guardada, entra directo offline como cliente
+                        com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                         currentRole = UserRole.CLIENTE
                         currentScreen = AppScreen.HOME
                     } else if (!savedToken.isNullOrEmpty() || !savedWalletId.isNullOrEmpty()) {
@@ -467,54 +466,8 @@ fun HomeScreen(
                         icon = Icons.Default.Sync,
                         label = "Sincronizar",
                         onClick = {
-                            Toast.makeText(context, "Iniciando sincronización...", Toast.LENGTH_SHORT).show()
-                            scope.launch {
-                                try {
-                                    val db = AppDatabase.getInstance(context)
-                                    val pendingTransactions = withContext(Dispatchers.IO) {
-                                        db.transactionDao().getTransactionsBySyncState(SyncState.PENDING)
-                                    }
-
-                                    if (pendingTransactions.isEmpty()) {
-                                        Toast.makeText(context, "No hay transacciones pendientes", Toast.LENGTH_SHORT).show()
-                                        return@launch
-                                    }
-
-                                    val syncItems = pendingTransactions.map { transaction ->
-                                        com.example.prototipopagosoffline.network.SyncItem(
-                                            id_transaccion = transaction.idTransaccion,
-                                            monto = transaction.monto.toInt(),
-                                            timestamp = transaction.timestamp,
-                                            comercio_id = transaction.comercioId,
-                                            token_id = transaction.tokenId,
-                                            firma = transaction.firma,
-                                            payload_original = transaction.payloadOriginal,
-                                            clave_publica = transaction.clavePublica
-                                        )
-                                    }
-
-                                    val response = withContext(Dispatchers.IO) {
-                                        RetrofitClient.apiService.syncPayments(syncItems)
-                                    }
-
-                                    if (response.isSuccessful) {
-                                        withContext(Dispatchers.IO) {
-                                            val syncedIds = pendingTransactions.map { it.idTransaccion }
-                                            db.transactionDao().updateSyncState(syncedIds, SyncState.SYNCED)
-                                            val updatedTransactions = db.transactionDao().getAllTransactions().take(10)
-                                            withContext(Dispatchers.Main) {
-                                                PaymentState.recentTransactions.clear()
-                                                PaymentState.recentTransactions.addAll(updatedTransactions)
-                                            }
-                                        }
-                                        Toast.makeText(context, "✅ Sincronización exitosa", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(context, "❌ Error en sincronización", Toast.LENGTH_SHORT).show()
-                                    }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "❌ Error de red", Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                            Toast.makeText(context, "Sincronización v2 programada", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
@@ -649,6 +602,7 @@ fun ClientScreen(
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
     val coordinator = remember { com.example.prototipopagosoffline.utils.OfflinePaymentCoordinator(database) }
+    val walletId = remember { TokenManager(context).getWalletId() }
     var pending by remember { mutableStateOf<com.example.prototipopagosoffline.database.NfcExchange?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -705,8 +659,12 @@ fun ClientScreen(
             Button(onClick = {
                 scope.launch {
                     try {
-                        val wallet = database.walletDao().getWallet() ?: error("Billetera no configurada")
-                        coordinator.confirm(pending!!.operationId, wallet.id)
+                        val currentWalletId = walletId ?: error("Billetera no configurada")
+                        require(database.walletDao().getWalletById(currentWalletId) != null) {
+                            "Billetera no configurada"
+                        }
+                        coordinator.confirm(pending!!.operationId, currentWalletId)
+                        com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                         message = "Pago reservado. Acercá nuevamente el teléfono para entregar el comprobante."
                     } catch (e: Exception) { message = e.message ?: "No se pudo confirmar" }
                 }
@@ -814,6 +772,7 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                                 check(tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)) {
                                     "No se pudo guardar la sesion"
                                 }
+                                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                             } catch (error: Exception) {
                                 tokenManager.clearToken()
                                 throw error

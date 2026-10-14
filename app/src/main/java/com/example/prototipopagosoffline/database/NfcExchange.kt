@@ -5,7 +5,13 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "nfc_exchanges", indices = [Index(value = ["state", "created_at_epoch_seconds"])])
+@Entity(
+    tableName = "nfc_exchanges",
+    indices = [
+        Index(value = ["state", "created_at_epoch_seconds"]),
+        Index(value = ["next_sync_at_epoch_seconds"])
+    ]
+)
 data class NfcExchange(
     @PrimaryKey @ColumnInfo(name = "operation_id") val operationId: String,
     @ColumnInfo(name = "request_envelope", typeAffinity = ColumnInfo.BLOB) val requestEnvelope: ByteArray,
@@ -17,7 +23,10 @@ data class NfcExchange(
     @ColumnInfo(name = "merchant_id") val merchantId: String? = null,
     @ColumnInfo(name = "terminal_id") val terminalId: String? = null,
     val state: String,
-    @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long
+    @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long,
+    @ColumnInfo(name = "sync_attempts", defaultValue = "0") val syncAttempts: Int = 0,
+    @ColumnInfo(name = "next_sync_at_epoch_seconds") val nextSyncAtEpochSeconds: Long? = null,
+    @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null
 )
 
 @Entity(tableName = "trusted_public_keys", indices = [Index(value = ["fingerprint"], unique = true)])
