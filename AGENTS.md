@@ -63,4 +63,4 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 
 ## Plan correctivo vigente
 
-La auditoría R01–R34 invalida el cierre integral previo. C0 está en preparación; v3 todavía no está implementado. Seguir las decisiones correctivas de la raíz, preservar datos v2 y registrar cada cambio antes de implementarlo. No avanzar de fase sin revisión independiente.
+La auditoría R01–R34 invalida el cierre integral previo. El contrato v3 está implementado como biblioteca y las fases correctivas C2–C6 incorporaron cambios funcionales; su ejecución integral permanece pendiente. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar compilación, migración, dispositivo o hardware como comprobados mientras no se ejecuten.

@@ -381,3 +381,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** intercambio físico entre teléfonos, ACR122U/HCE y cancelación bajo red real quedan pendientes.
 - **Commit:** `fix(transports): [TFG-C5-AN-01] aislar activaciones y colas por identidad`
+## TFG-C7-DOC-01 — Estado Android consolidado
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** instrucciones Android actualizadas para distinguir contrato implementado, ejecución pendiente y evidencia física inexistente; el informe académico independiente concentra el detalle sin reescribir Entrega 4.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Commit:** `docs(plan): [TFG-C7-DOC-01] consolidar estado Android pendiente de validar`
