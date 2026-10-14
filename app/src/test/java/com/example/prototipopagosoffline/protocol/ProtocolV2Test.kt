@@ -63,6 +63,20 @@ class ProtocolV2Test {
     }
 
     @Test
+    fun recoversHistoricalKotlinEscapedOuterWithoutChangingSignedBytes() {
+        val pythonOuter = ProtocolV2.encodeSignedEnvelope(request, signatureBase64)
+        val historicalOuter = pythonOuter.toString(Charsets.UTF_8).replace("=", "\\u003d").toByteArray()
+        val historical = ProtocolV2.parseSignedEnvelope(historicalOuter)
+        val python = ProtocolV2.parseSignedEnvelope(pythonOuter)
+        assertArrayEquals(canonicalRequest.toByteArray(), historical.payloadBytes)
+        assertArrayEquals(python.payloadBytes, historical.payloadBytes)
+        assertTrue(historical.verify(publicKeyBase64))
+        assertFalse(pythonOuter.toString(Charsets.UTF_8).contains("\\u003d"))
+        val wrongVersion = canonicalRequest.replace("\"version\":2", "\"version\":2.0")
+        assertThrows(IllegalArgumentException::class.java) { ProtocolV2.parseCanonicalPayload(wrongVersion.toByteArray()) }
+    }
+
+    @Test
     fun rejectsInvalidAmountsAndAdditionalFields() {
         listOf(0, -1, 100_001).forEach { amount ->
             val changed = request.deepCopy().apply { addProperty("amount_cents", amount) }

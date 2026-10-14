@@ -1,6 +1,7 @@
 package com.example.prototipopagosoffline.protocol
 
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -38,7 +39,8 @@ object ProtocolV2 {
     val SW_NOT_FOUND: ByteArray = hex("6A82")
     val SW_CONDITIONS_NOT_SATISFIED: ByteArray = hex("6985")
 
-    private val gson = Gson()
+    private val gson = GsonBuilder().disableHtmlEscaping().create()
+    private val historicalGson = Gson()
     private val identifierPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$")
     private val digestPattern = Regex("^[0-9a-f]{64}$")
     private val noncePattern = Regex("^[A-Za-z0-9_-]{22}$")
@@ -181,7 +183,11 @@ object ProtocolV2 {
         require(envelope.keySet() == setOf("payload_b64", "signature_b64")) {
             "Campos de sobre incompatibles"
         }
-        require(canonicalJson(envelope) == text) { "El sobre firmado no es canonico" }
+        // Historical Kotlin envelopes escaped Base64 padding as \u003d. Recovery preserves
+        // the received bytes; accepting that exterior representation does not re-sign a payment.
+        require(canonicalJson(envelope) == text || historicalGson.toJson(canonicalElement(envelope)) == text) {
+            "El sobre firmado no es canonico"
+        }
         val payloadBytes = decodeBase64(envelope.string("payload_b64"), "payload_b64")
         val signature = envelope.string("signature_b64")
         decodeBase64(signature, "signature_b64")

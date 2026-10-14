@@ -333,3 +333,20 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** ACR122U y Android físico no disponibles.
 - **Commit:** `chore(audit): [TFG-C0-AN-01] preparar correcciones trazables`
 - **Impacto académico:** separar auditoría, implementación y evidencia; no actualizar Entrega 4.
+
+
+## TFG-C1-AN-01 — Contrato firmado v3 interoperable
+
+- **Fecha:** 2026-10-14
+- **Fase:** C1
+- **Estado:** COMPROBADO
+- **Hallazgos:** R01, R02, R09, R16, R20, R33, R34.
+- **Anterior:** sobres v2 incompatibles por escape `\u003d` de Gson y ausencia de autorización verificable.
+- **Nuevo previsto:** contrato v3 estricto y autorización/cierre/resolución firmados; compatibilidad v2 sin re-firmar; pruebas completas cruzadas.
+- **Decisión:** bytes originales, digests de payload, mensajes independientes hasta 4096 bytes, UTC segundos enteros y ECDSA P-256/DER canónico.
+- **Archivos:** `app/src/main/java/com/example/prototipopagosoffline/protocol/ProtocolV3.kt`, `app/src/test/java/com/example/prototipopagosoffline/protocol/ProtocolV3Test.kt`, `app/src/test/resources/protocol_v3_vectors.json`, `app/src/main/java/com/example/prototipopagosoffline/protocol/ProtocolV2.kt`, `app/src/test/java/com/example/prototipopagosoffline/protocol/ProtocolV2Test.kt`, `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** v3 nuevo; compatibilidad exterior en v2 preservando bytes firmados; ningún blob v2 ni base existente modificada.
+- **Pruebas:** 38 pruebas unitarias JVM aprobadas (`:app:testDebugUnitTest`), incluyendo 13 en `ProtocolV3Test` y 9 en `ProtocolV2Test`. Se verificaron los 7 sobres canónicos Python originales sin reserializar ni firmar; alteración exhaustiva de campos; validación controlada de curvas DER no soportadas; formato canónico sin escape HTML; capacidades SELECT con versión y límites estrictos; vinculación de autorizaciones, comprobantes y acuses; y generación del archivo de vectores `app/build/cross_language/v3_kotlin_vectors.json`, verificado íntegramente por la herramienta cruzada de Python (`CROSS_LANGUAGE_VERIFIED=7`).
+- **Limitaciones:** conexión a persistencia Room y transportes HCE/NFC/TCP se completa en C3 y C5; hardware físico ACR122U e instrumentadas permanecen pendientes.
+- **Commit:** `feat(protocol): [TFG-C1-AN-01] definir mensajes v3 verificables`
+- **Impacto académico:** demuestra equivalencia e interoperabilidad cruzada Kotlin/Python sin depender de reconstrucción de payloads ni mutación de bytes firmados.
