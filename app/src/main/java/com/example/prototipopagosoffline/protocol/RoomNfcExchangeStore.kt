@@ -40,6 +40,11 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
 
     override suspend fun getReceipt(operationId: String): ByteArray? = dao.getExchange(operationId)?.receiptEnvelope
 
+    override suspend fun getAuthorization(operationId: String): ByteArray? {
+        val authorizationId = dao.getExchange(operationId)?.authorizationId ?: return null
+        return database.authorizationDao().getAuthorization(authorizationId)?.authorizationEnvelope
+    }
+
     override suspend fun markDeliveryStarted(operationId: String) {
         dao.markDeliveryStarted(operationId)
     }

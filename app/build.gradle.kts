@@ -64,6 +64,11 @@ android {
             .get()
             .toBooleanStrictOrNull() ?: false
         buildConfigField("boolean", "MERCADO_PAGO_ENABLED", mercadoPagoEnabled.toString())
+        fun configuredString(name: String): String = providers.environmentVariable(name)
+            .orElse(providers.gradleProperty(name)).orElse("").get()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "ISSUER_PUBLIC_KEY_B64", "\"${configuredString("ISSUER_PUBLIC_KEY_B64")}\"")
+        buildConfigField("String", "ISSUER_KEY_ID", "\"${configuredString("ISSUER_KEY_ID")}\"")
     }
 
     buildTypes {

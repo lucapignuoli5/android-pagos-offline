@@ -15,6 +15,11 @@ data class LocalOfflineAuthorization(
     @ColumnInfo(name = "remaining_payments") val remainingPayments: Int,
     @ColumnInfo(name = "issued_at_epoch_seconds") val issuedAtEpochSeconds: Long,
     @ColumnInfo(name = "expires_at_epoch_seconds") val expiresAtEpochSeconds: Long,
+    @ColumnInfo(name = "authorization_envelope", typeAffinity = ColumnInfo.BLOB) val authorizationEnvelope: ByteArray? = null,
+    @ColumnInfo(name = "next_issuance_index", defaultValue = "1") val nextIssuanceIndex: Int = 1,
+    @ColumnInfo(name = "closure_envelope", typeAffinity = ColumnInfo.BLOB) val closureEnvelope: ByteArray? = null,
+    @ColumnInfo(name = "closure_manifest", typeAffinity = ColumnInfo.BLOB) val closureManifest: ByteArray? = null,
+    @ColumnInfo(name = "closure_state", defaultValue = "OPEN") val closureState: String = "OPEN",
     val active: Boolean = true
 )
 

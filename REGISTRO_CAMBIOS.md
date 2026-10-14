@@ -389,3 +389,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Cambio:** instrucciones Android actualizadas para distinguir contrato implementado, ejecución pendiente y evidencia física inexistente; el informe académico independiente concentra el detalle sin reescribir Entrega 4.
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Commit:** `docs(plan): [TFG-C7-DOC-01] consolidar estado Android pendiente de validar`
+## TFG-C5-AN-02 — Flujo operativo v3 y cierre durable
+
+- **Fecha:** 2026-10-14
+- **Fase:** C5
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** Android aprovisiona y verifica autorizaciones v3 con emisor fijado externamente, conserva el sobre, emite índices permanentes, entrega la autorización mediante APDU 0x50, produce comprobantes v3 y sincroniza con resultados separados. Room 11→13 añade evidencia y cierre durable; WorkManager congela y reintenta cierres firmados al expirar.
+- **Archivos:** configuración Gradle, Room/DAO, DTO/API, protocolo HCE, coordinador, aprovisionador, sincronización y `OfflineAuthorizationCloser.kt`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** schemas Room 11–13, compilación, ejecución Android, Keystore y hardware quedan pendientes.
+- **Commit:** `feat(v3): [TFG-C5-AN-02] integrar autorizacion y cierre v3`

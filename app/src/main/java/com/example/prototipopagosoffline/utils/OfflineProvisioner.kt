@@ -10,6 +10,8 @@ import com.example.prototipopagosoffline.network.KeyRegistrationRequest
 import com.example.prototipopagosoffline.network.LoginResponse
 import com.example.prototipopagosoffline.network.OfflineAuthorizationRequest
 import com.example.prototipopagosoffline.protocol.ProtocolV2
+import com.example.prototipopagosoffline.protocol.ProtocolV3
+import com.example.prototipopagosoffline.BuildConfig
 import com.google.gson.JsonObject
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -68,7 +70,10 @@ class OfflineProvisioner(
             return
         }
 
-        val authorizationResponse = api.createOfflineAuthorization(
+        require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank()) {
+            "Confianza del emisor v3 no configurada"
+        }
+        val authorizationResponse = api.createOfflineAuthorizationV3(
             OfflineAuthorizationRequest(
                 wallet_id = login.wallet_id,
                 wallet_key_id = key.keyId,
@@ -78,11 +83,14 @@ class OfflineProvisioner(
         )
         require(authorizationResponse.isSuccessful) { "No se pudo obtener autorizacion offline" }
         val authorization = requireNotNull(authorizationResponse.body()) { "Respuesta de autorizacion vacia" }
-        require(authorization.wallet_id == login.wallet_id && authorization.wallet_key_id == key.keyId)
-        require(authorization.currency == ProtocolV2.CURRENCY)
-        require(authorization.max_payment_cents in 1..ProtocolV2.MAX_AMOUNT_CENTS)
-        require(authorization.max_payments in 1..10)
-        require(authorization.authorized_total_cents >= authorization.max_payment_cents)
+        val grantBytes = Base64.getDecoder().decode(authorization.authorization_envelope_b64)
+        val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
+        require(ProtocolV3.verifyAuthorization(grant, BuildConfig.ISSUER_PUBLIC_KEY_B64, BuildConfig.ISSUER_KEY_ID))
+        val payload = grant.payload
+        require(payload["authorization_id"].asString == authorization.authorization_id)
+        require(payload["wallet_id"].asString == login.wallet_id)
+        require(payload["wallet_key_id"].asString == key.keyId)
+        require(payload["currency"].asString == ProtocolV3.CURRENCY)
 
         database.withTransaction {
             saveWallet(balance.confirmed_balance_cents, login.wallet_id)
@@ -90,12 +98,13 @@ class OfflineProvisioner(
                 LocalOfflineAuthorization(
                     id = authorization.authorization_id,
                     walletId = authorization.wallet_id,
-                    walletKeyId = authorization.wallet_key_id,
-                    maxPaymentCents = authorization.max_payment_cents,
+                    walletKeyId = payload["wallet_key_id"].asString,
+                    maxPaymentCents = payload["max_payment_cents"].asLong,
                     remainingAmountCents = authorization.authorized_total_cents,
-                    remainingPayments = authorization.max_payments,
+                    remainingPayments = payload["max_payments"].asInt,
                     issuedAtEpochSeconds = Instant.parse(authorization.issued_at).epochSecond,
-                    expiresAtEpochSeconds = Instant.parse(authorization.expires_at).epochSecond
+                    expiresAtEpochSeconds = Instant.parse(authorization.spend_expires_at).epochSecond,
+                    authorizationEnvelope = grantBytes
                 )
             )
         }

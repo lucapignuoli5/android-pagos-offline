@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 11,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .build().also { instance = it }
             }
         }
@@ -113,6 +113,21 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN cancelled_at_epoch_seconds INTEGER")
                 db.execSQL("ALTER TABLE transaction_history ADD COLUMN wallet_id TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_transaction_history_wallet_id ON transaction_history(wallet_id)")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN authorization_envelope BLOB")
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN next_issuance_index INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_envelope BLOB")
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_manifest BLOB")
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_state TEXT NOT NULL DEFAULT 'OPEN'")
             }
         }
     }

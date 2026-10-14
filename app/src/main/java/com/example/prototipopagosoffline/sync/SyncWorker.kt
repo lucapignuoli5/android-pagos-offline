@@ -23,7 +23,9 @@ class SyncWorker(
             if (tokenManager.getRole() != role || currentAccountId != accountId) return Result.success()
             val run = when (role) {
                 "cliente" -> {
-                    V2SyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
+                    val result = V2SyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
+                    OfflineAuthorizationCloser(database, RetrofitClient.apiService).closeExpired(accountId)
+                    result
                 }
                 "comercio" -> {
                     MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(accountId)

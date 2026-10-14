@@ -29,6 +29,22 @@ interface ApiService {
         @Body request: OfflineAuthorizationRequest
     ): Response<OfflineAuthorizationResponse>
 
+    @POST("/api/v3/offline-authorizations")
+    suspend fun createOfflineAuthorizationV3(
+        @Body request: OfflineAuthorizationRequest
+    ): Response<OfflineAuthorizationV3Response>
+
+    @POST("/api/v3/offline-payments/sync")
+    suspend fun syncOfflinePaymentsV3(
+        @Body request: OfflinePaymentSyncV3Request
+    ): Response<OfflinePaymentSyncV3Response>
+
+    @POST("/api/v3/offline-authorizations/{authorizationId}/close")
+    suspend fun closeOfflineAuthorizationV3(
+        @Path("authorizationId") authorizationId: String,
+        @Body request: OfflineAuthorizationCloseRequest
+    ): Response<OfflineCommitmentResponse>
+
     @GET("/api/wallets/{walletId}/balance")
     suspend fun getWalletBalance(@Path("walletId") walletId: String): Response<WalletBalanceResponse>
 

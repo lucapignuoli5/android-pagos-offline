@@ -14,7 +14,7 @@ class NfcProtocolEngine(
 
     suspend fun process(commandApdu: ByteArray): ByteArray {
         if (isSelect(commandApdu)) {
-            return SELECT_CAPABILITIES + ProtocolV2.SW_OK
+            return ProtocolV3.SELECT_CAPABILITIES + ProtocolV2.SW_OK
         }
         val cacheKey = Base64.getEncoder().encodeToString(commandApdu)
         responseCache[cacheKey]?.let { return it.copyOf() }
@@ -24,6 +24,7 @@ class NfcProtocolEngine(
                     ProtocolV2.INS_PUT_REQUEST -> acceptFragment(command, ::acceptRequest)
                     ProtocolV2.INS_GET_STATUS -> getStatus(command)
                     ProtocolV2.INS_GET_RECEIPT -> getReceipt(command)
+                    ProtocolV3.INS_GET_AUTHORIZATION -> getAuthorization(command)
                     ProtocolV2.INS_PUT_ACK -> acceptFragment(command, ::acceptAck)
                     else -> ProtocolV2.SW_BAD_DATA
                 }
@@ -78,6 +79,17 @@ class NfcProtocolEngine(
         return byteArrayOf(lastFlag) + chunks[command.sequence] + ProtocolV2.SW_OK
     }
 
+    private suspend fun getAuthorization(command: ApduCommand): ByteArray {
+        require(command.isLast)
+        val operationId = operationId(command.data)
+        val authorization = store.getAuthorization(operationId)
+            ?: return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
+        val chunks = ProtocolV2.chunkMessage(authorization)
+        if (command.sequence !in chunks.indices) return ProtocolV2.SW_NOT_FOUND
+        val lastFlag = if (command.sequence == chunks.lastIndex) 1.toByte() else 0.toByte()
+        return byteArrayOf(lastFlag) + chunks[command.sequence] + ProtocolV2.SW_OK
+    }
+
     private suspend fun acceptAck(data: ByteArray): ByteArray {
         val accepted = try {
             exchangeService.acceptAck(data)
@@ -115,8 +127,7 @@ class NfcProtocolEngine(
 
     companion object {
         val SELECT_CAPABILITIES: ByteArray =
-            "{\"chunk_bytes\":160,\"max_message_bytes\":4096,\"protocol_version\":2}"
-                .toByteArray(Charsets.US_ASCII)
+            ProtocolV3.SELECT_CAPABILITIES.copyOf()
     }
 }
 
@@ -129,6 +140,7 @@ interface NfcExchangeStore {
     suspend fun getRequest(operationId: String): ByteArray?
     suspend fun getState(operationId: String): ExchangeState?
     suspend fun getReceipt(operationId: String): ByteArray?
+    suspend fun getAuthorization(operationId: String): ByteArray? = null
     suspend fun markDeliveryStarted(operationId: String)
     suspend fun saveAck(operationId: String, signedEnvelope: ByteArray): SaveResult
 }

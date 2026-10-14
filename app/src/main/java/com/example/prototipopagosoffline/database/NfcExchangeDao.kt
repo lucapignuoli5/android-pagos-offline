@@ -52,6 +52,9 @@ interface NfcExchangeDao {
     @Query("UPDATE nfc_exchanges SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
     suspend fun finishSync(operationId: String, state: String, code: String?): Int
 
+    @Query("SELECT * FROM nfc_exchanges WHERE authorization_id = :authorizationId AND receipt_envelope IS NOT NULL ORDER BY created_at_epoch_seconds ASC")
+    suspend fun getByAuthorization(authorizationId: String): List<NfcExchange>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)
 

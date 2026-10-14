@@ -73,6 +73,48 @@ data class OfflineAuthorizationResponse(
     val expires_at: String
 )
 
+data class OfflineAuthorizationV3Response(
+    val authorization_id: String,
+    val wallet_id: String,
+    val authorized_total_cents: Long,
+    val authorization_envelope_b64: String,
+    val issued_at: String,
+    val spend_expires_at: String
+)
+
+data class OfflinePaymentEvidenceV3(
+    val operation_id: String,
+    val request_envelope_b64: String,
+    val authorization_envelope_b64: String,
+    val receipt_envelope_b64: String,
+    val ack_envelope_b64: String?
+)
+
+data class OfflinePaymentSyncV3Request(val operations: List<OfflinePaymentEvidenceV3>)
+
+data class OfflinePaymentResultV3(
+    val operation_id: String,
+    val submission_status: String,
+    val operation_status: String,
+    val final: Boolean,
+    val code: String?
+)
+
+data class OfflinePaymentSyncV3Response(val results: List<OfflinePaymentResultV3>)
+
+data class OfflineAuthorizationCloseRequest(
+    val close_envelope_b64: String,
+    val manifest_b64: String
+)
+
+data class OfflineCommitmentResponse(
+    val authorization_id: String,
+    val reserved_cents: Long,
+    val emitted_cents: Long,
+    val emitted_count: Int,
+    val closed: Boolean
+)
+
 data class WalletBalanceResponse(
     val wallet_id: String,
     val currency: String,

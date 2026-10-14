@@ -8,6 +8,9 @@ import com.example.prototipopagosoffline.network.OfflinePaymentEvidence
 import com.example.prototipopagosoffline.network.OfflinePaymentResultV2
 import com.example.prototipopagosoffline.network.OfflinePaymentStatusResponse
 import com.example.prototipopagosoffline.network.OfflinePaymentSyncV2Request
+import com.example.prototipopagosoffline.network.OfflinePaymentEvidenceV3
+import com.example.prototipopagosoffline.network.OfflinePaymentResultV3
+import com.example.prototipopagosoffline.network.OfflinePaymentSyncV3Request
 import java.time.Instant
 import java.util.Base64
 
@@ -24,15 +27,33 @@ class V2SyncRepository(
         val candidates = database.nfcExchangeDao().getSyncCandidates(walletId, instant, limit)
         if (candidates.isEmpty()) return SyncRun(0, database.nfcExchangeDao().getNextSyncAt(walletId))
 
-        val request = OfflinePaymentSyncV2Request(candidates.map(::evidence))
-        val response = runCatching { api.syncOfflinePaymentsV2(request) }.getOrNull()
-        if (response == null || !response.isSuccessful || response.body() == null) {
-            candidates.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
-            return SyncRun(0, database.nfcExchangeDao().getNextSyncAt(walletId))
+        val v3 = mutableListOf<Pair<NfcExchange, ByteArray>>()
+        val v2 = mutableListOf<NfcExchange>()
+        for (candidate in candidates) {
+            val authorization = candidate.authorizationId?.let {
+                database.authorizationDao().getAuthorization(it)?.authorizationEnvelope
+            }
+            if (authorization == null) v2 += candidate else v3 += candidate to authorization
+        }
+        val received = mutableListOf<OfflinePaymentResultV2>()
+        if (v2.isNotEmpty()) {
+            val response = runCatching {
+                api.syncOfflinePaymentsV2(OfflinePaymentSyncV2Request(v2.map(::evidence)))
+            }.getOrNull()
+            if (response?.isSuccessful == true && response.body() != null) received += response.body()!!.results
+            else v2.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
+        }
+        if (v3.isNotEmpty()) {
+            val response = runCatching {
+                api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(v3.map { evidenceV3(it.first, it.second) }))
+            }.getOrNull()
+            if (response?.isSuccessful == true && response.body() != null) {
+                received += response.body()!!.results.map(::normalizeV3)
+            } else v3.forEach { scheduleRetry(it.first, "NETWORK_OR_HTTP_ERROR", instant) }
         }
 
         val candidateIds = candidates.mapTo(mutableSetOf()) { it.operationId }
-        val grouped = response.body()!!.results.groupBy { it.operation_id }
+        val grouped = received.groupBy { it.operation_id }
         var processed = 0
         for (candidate in candidates) {
             val result = selectUniqueResult(candidate.operationId, candidateIds, grouped[candidate.operationId])
@@ -123,6 +144,30 @@ class V2SyncRepository(
             receipt_envelope_b64 = Base64.getEncoder().encodeToString(receipt),
             ack_envelope_b64 = exchange.ackEnvelope?.let(Base64.getEncoder()::encodeToString)
         )
+    }
+
+    private fun evidenceV3(exchange: NfcExchange, authorization: ByteArray): OfflinePaymentEvidenceV3 {
+        val receipt = requireNotNull(exchange.receiptEnvelope)
+        return OfflinePaymentEvidenceV3(
+            operation_id = exchange.operationId,
+            request_envelope_b64 = Base64.getEncoder().encodeToString(exchange.requestEnvelope),
+            authorization_envelope_b64 = Base64.getEncoder().encodeToString(authorization),
+            receipt_envelope_b64 = Base64.getEncoder().encodeToString(receipt),
+            ack_envelope_b64 = exchange.ackEnvelope?.let(Base64.getEncoder()::encodeToString)
+        )
+    }
+
+    private fun normalizeV3(result: OfflinePaymentResultV3): OfflinePaymentResultV2 {
+        val status = when {
+            result.submission_status == "CONFLICT" -> "CONFLICT"
+            result.submission_status == "INVALID_EVIDENCE" -> "CONFLICT"
+            result.submission_status == "RETRYABLE_ERROR" -> "RETRYABLE_ERROR"
+            result.operation_status == "ACCEPTED" -> "ACCEPTED"
+            result.operation_status == "REJECTED" && result.final -> "REJECTED"
+            result.operation_status == "PENDING_REVIEW" -> "CONFLICT"
+            else -> "PENDING_EVIDENCE"
+        }
+        return OfflinePaymentResultV2(result.operation_id, status, result.code)
     }
 
 }
