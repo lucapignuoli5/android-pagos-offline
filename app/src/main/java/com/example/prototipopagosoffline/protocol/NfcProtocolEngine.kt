@@ -10,6 +10,7 @@ class NfcProtocolEngine(
 ) {
     private val accumulators = mutableMapOf<Int, FragmentAccumulator>()
     private val responseCache = mutableMapOf<String, ByteArray>()
+    private val exchangeService = ClientPaymentExchangeService(store, trustedKeys, now)
 
     suspend fun process(commandApdu: ByteArray): ByteArray {
         if (isSelect(commandApdu)) {
@@ -51,21 +52,12 @@ class NfcProtocolEngine(
     }
 
     private suspend fun acceptRequest(data: ByteArray): ByteArray {
-        val envelope = ProtocolV2.parseSignedEnvelope(data)
-        require(ProtocolV2.validatePayload(envelope.payload) == MessageType.PAYMENT_REQUEST)
-        val expiresAt = Instant.parse(envelope.payload["expires_at"].asString)
-        require(expiresAt.isAfter(now())) { "Solicitud vencida" }
-        val publicKey = trustedKeys.resolve(
-            envelope.payload["pos_key_id"].asString,
-            envelope.payload["pos_key_fingerprint"].asString
-        ) ?: return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
-        if (!envelope.verify(publicKey)) return ProtocolV2.SW_BAD_DATA
-
-        val operationId = envelope.payload["operation_id"].asString
-        return when (store.saveRequest(operationId, data)) {
-            SaveResult.INSERTED, SaveResult.IDENTICAL -> statusResponse(operationId, ExchangeState.REQUEST_RECEIVED)
-            SaveResult.CONFLICT -> ProtocolV2.SW_BAD_DATA
+        val accepted = try {
+            exchangeService.acceptRequest(data)
+        } catch (_: IllegalStateException) {
+            return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
         }
+        return statusResponse(accepted.operationId, accepted.state)
     }
 
     private suspend fun getStatus(command: ApduCommand): ByteArray {
@@ -87,44 +79,12 @@ class NfcProtocolEngine(
     }
 
     private suspend fun acceptAck(data: ByteArray): ByteArray {
-        val envelope = ProtocolV2.parseSignedEnvelope(data)
-        require(ProtocolV2.validatePayload(envelope.payload) == MessageType.PAYMENT_ACK)
-        val publicKey = trustedKeys.resolve(
-            envelope.payload["pos_key_id"].asString,
-            envelope.payload["pos_key_fingerprint"].asString
-        ) ?: return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
-        if (!envelope.verify(publicKey)) return ProtocolV2.SW_BAD_DATA
-
-        val operationId = envelope.payload["operation_id"].asString
-        val requestData = store.getRequest(operationId) ?: return ProtocolV2.SW_NOT_FOUND
-        val receiptData = store.getReceipt(operationId) ?: return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
-        val request = ProtocolV2.parseSignedEnvelope(requestData).payload
-        val receipt = ProtocolV2.parseSignedEnvelope(receiptData).payload
-        requireMatchingOperation(request, receipt, envelope.payload)
-        require(envelope.payload["receipt_digest"].asString == ProtocolV2.payloadDigest(receipt))
-
-        return when (store.saveAck(operationId, data)) {
-            SaveResult.INSERTED, SaveResult.IDENTICAL -> statusResponse(operationId, ExchangeState.LOCALLY_ACCEPTED)
-            SaveResult.CONFLICT -> ProtocolV2.SW_BAD_DATA
+        val accepted = try {
+            exchangeService.acceptAck(data)
+        } catch (_: IllegalStateException) {
+            return ProtocolV2.SW_CONDITIONS_NOT_SATISFIED
         }
-    }
-
-    private fun requireMatchingOperation(
-        request: com.google.gson.JsonObject,
-        receipt: com.google.gson.JsonObject,
-        ack: com.google.gson.JsonObject
-    ) {
-        val common = listOf(
-            "operation_id", "merchant_id", "terminal_id", "amount_cents", "currency", "nonce",
-            "issued_at", "expires_at"
-        )
-        common.forEach { field ->
-            require(request[field] == receipt[field] && receipt[field] == ack[field]) { "$field no coincide" }
-        }
-        listOf("wallet_id", "offline_authorization_id").forEach { field ->
-            require(receipt[field] == ack[field]) { "$field no coincide" }
-        }
-        require(receipt["request_digest"].asString == ProtocolV2.payloadDigest(request))
+        return statusResponse(accepted.operationId, accepted.state)
     }
 
     private fun operationId(data: ByteArray): String {

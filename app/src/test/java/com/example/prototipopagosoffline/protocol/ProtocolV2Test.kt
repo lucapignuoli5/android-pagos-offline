@@ -112,6 +112,30 @@ class ProtocolV2Test {
         assertThrows(IllegalArgumentException::class.java) { ProtocolV2.validatePayload(ack) }
     }
 
+    @Test
+    fun receiptMustMatchTheExactRequest() {
+        val receipt = JsonObject().apply {
+            listOf(
+                "version", "operation_id", "merchant_id", "terminal_id", "amount_cents",
+                "currency", "nonce", "issued_at", "expires_at"
+            ).forEach { field -> add(field, request[field]) }
+            addProperty("type", "payment_receipt")
+            addProperty("wallet_id", "wallet-1")
+            addProperty("offline_authorization_id", "authorization-1")
+            addProperty("wallet_key_id", "wallet-key-1")
+            addProperty("wallet_key_fingerprint", "1".repeat(64))
+            addProperty("request_digest", ProtocolV2.payloadDigest(request))
+        }
+        ProtocolV2.requireMatchingReceipt(request, receipt)
+
+        val altered = receipt.deepCopy().apply {
+            addProperty("amount_cents", request["amount_cents"].asLong + 1)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ProtocolV2.requireMatchingReceipt(request, altered)
+        }
+    }
+
     companion object {
         private lateinit var request: JsonObject
         private lateinit var canonicalRequest: String

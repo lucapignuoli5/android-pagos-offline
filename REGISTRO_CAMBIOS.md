@@ -235,3 +235,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la ejecución con Android Keystore requiere dispositivo/emulador.
 - **Commit:** `feat(merchant): [TFG-F6-AN-01] aprovisionar terminal movil`
 - **Impacto académico:** permite presentar QR/TCP y NFC móvil como transportes del contrato v2, no como comprobantes autocontenidos inseguros.
+
+## TFG-F6-AN-02 — Unificar validación y persistencia del comercio móvil
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos móviles secundarios e integraciones
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** HCE validaba solicitudes y acuses dentro del motor APDU, mientras los flujos secundarios reconstruían campos y guardaban transacciones heredadas.
+- **Comportamiento anterior:** cada transporte tenía validación y persistencia incompatibles, y el comercio móvil no tenía una cola v2 propia.
+- **Comportamiento nuevo:** HCE delega solicitud y acuse en un receptor común independiente del canal. El comercio móvil crea solicitudes v2 firmadas, verifica comprobantes con claves de billetera, genera acuses y persiste solicitud/comprobante/acuse atómicamente en una cola Room 10 separada e idempotente.
+- **Decisión:** extraer el receptor de billetera independiente del transporte y crear operaciones POS móviles durables con solicitud, comprobante, acuse y estados de conciliación.
+- **Archivos:** `protocol/ClientPaymentExchangeService.kt`, `protocol/NfcProtocolEngine.kt`, `protocol/ProtocolV2.kt`, `database/AppDatabase.kt`, `database/MobilePosOperation.kt`, `database/MobilePosOperationDao.kt`, `utils/MobilePosCoordinator.kt`, esquema Room 10, migración y pruebas, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** validación común de solicitud/comprobante/acuse, estados del comercio móvil y migración Room 9→10.
+- **Pruebas:** 18 pruebas JVM, APK debug, compilación instrumentada y lint correctos; las pruebas APDU ejercen el receptor extraído y una prueba adicional rechaza un comprobante cuyo importe no coincide con la solicitud.
+- **Limitaciones:** las pantallas y transportes se conectan en las unidades siguientes.
+- **Commit:** `feat(protocol): [TFG-F6-AN-02] compartir validacion de pagos locales`
+- **Impacto académico:** atribuye la seguridad al contrato y a la persistencia, no al canal NFC o TCP.

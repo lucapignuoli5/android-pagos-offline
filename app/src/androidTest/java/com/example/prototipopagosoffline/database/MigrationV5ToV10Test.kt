@@ -11,7 +11,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class MigrationV5ToV9Test {
+class MigrationV5ToV10Test {
     @Test
     fun preservesLegacyWalletBalanceAndAddsReservationTables() {
         val context = ApplicationProvider.getApplicationContext<Context>()
@@ -19,7 +19,7 @@ class MigrationV5ToV9Test {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(name)
-                .callback(object : SupportSQLiteOpenHelper.Callback(9) {
+                .callback(object : SupportSQLiteOpenHelper.Callback(10) {
                     override fun onCreate(db: SupportSQLiteDatabase) = Unit
                     override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
                 })
@@ -35,6 +35,7 @@ class MigrationV5ToV9Test {
             AppDatabase.MIGRATION_6_7.migrate(db)
             AppDatabase.MIGRATION_7_8.migrate(db)
             AppDatabase.MIGRATION_8_9.migrate(db)
+            AppDatabase.MIGRATION_9_10.migrate(db)
 
             db.query("SELECT confirmed_balance_cents, reserved_balance_cents, currency FROM offline_wallet WHERE id = 'wallet-legacy'").use { cursor ->
                 assertEquals(true, cursor.moveToFirst())
@@ -57,6 +58,10 @@ class MigrationV5ToV9Test {
             db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mobile_terminals'").use { cursor ->
                 assertEquals(true, cursor.moveToFirst())
                 assertEquals("mobile_terminals", cursor.getString(0))
+            }
+            db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mobile_pos_operations'").use { cursor ->
+                assertEquals(true, cursor.moveToFirst())
+                assertEquals("mobile_pos_operations", cursor.getString(0))
             }
         } finally {
             helper.close()

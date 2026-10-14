@@ -16,9 +16,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TrustedPublicKey::class,
         LocalOfflineAuthorization::class,
         WalletKeyMetadata::class,
-        MobileTerminal::class
+        MobileTerminal::class,
+        MobilePosOperation::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -33,6 +34,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun mobileTerminalDao(): MobileTerminalDao
 
+    abstract fun mobilePosOperationDao(): MobilePosOperationDao
+
     companion object {
         private const val DATABASE_NAME = "offline_payments.db"
 
@@ -46,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .build().also { instance = it }
             }
         }
@@ -93,6 +96,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS mobile_terminals (terminal_id TEXT NOT NULL PRIMARY KEY, merchant_id TEXT NOT NULL, user_id INTEGER NOT NULL, pos_key_id TEXT NOT NULL, pos_key_fingerprint TEXT NOT NULL, keystore_alias TEXT NOT NULL, public_key_b64 TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mobile_terminals_user_id ON mobile_terminals(user_id)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mobile_terminals_pos_key_id ON mobile_terminals(pos_key_id)")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS mobile_pos_operations (operation_id TEXT NOT NULL PRIMARY KEY, request_envelope BLOB NOT NULL, receipt_envelope BLOB, ack_envelope BLOB, merchant_id TEXT NOT NULL, terminal_id TEXT NOT NULL, wallet_id TEXT, authorization_id TEXT, amount_cents INTEGER NOT NULL, state TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL, sync_attempts INTEGER NOT NULL DEFAULT 0, next_sync_at_epoch_seconds INTEGER, last_sync_code TEXT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mobile_pos_operations_state_created_at_epoch_seconds ON mobile_pos_operations(state, created_at_epoch_seconds)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mobile_pos_operations_next_sync_at_epoch_seconds ON mobile_pos_operations(next_sync_at_epoch_seconds)")
             }
         }
     }

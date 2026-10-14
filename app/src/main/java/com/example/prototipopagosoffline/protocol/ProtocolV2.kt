@@ -217,6 +217,33 @@ object ProtocolV2 {
         .digest(canonicalJson(payload).toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 
+    fun requireMatchingReceipt(request: JsonObject, receipt: JsonObject) {
+        val common = listOf(
+            "operation_id", "merchant_id", "terminal_id", "amount_cents", "currency", "nonce",
+            "issued_at", "expires_at"
+        )
+        common.forEach { field ->
+            require(request[field] == receipt[field]) { "$field no coincide" }
+        }
+        require(receipt["request_digest"].asString == payloadDigest(request)) {
+            "request_digest no coincide"
+        }
+    }
+
+    fun requireMatchingAck(request: JsonObject, receipt: JsonObject, ack: JsonObject) {
+        requireMatchingReceipt(request, receipt)
+        val common = listOf(
+            "operation_id", "merchant_id", "terminal_id", "amount_cents", "currency", "nonce",
+            "issued_at", "expires_at"
+        )
+        common.forEach { field ->
+            require(receipt[field] == ack[field]) { "$field no coincide" }
+        }
+        listOf("wallet_id", "offline_authorization_id").forEach { field ->
+            require(receipt[field] == ack[field]) { "$field no coincide" }
+        }
+    }
+
     fun buildApdu(instruction: Int, sequence: Int, isLast: Boolean, data: ByteArray = byteArrayOf()): ByteArray {
         require(instruction in supportedInstructions()) { "Instruccion APDU no soportada" }
         require(sequence in 0..255) { "Secuencia APDU fuera de rango" }
