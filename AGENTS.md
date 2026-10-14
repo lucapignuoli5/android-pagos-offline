@@ -17,12 +17,13 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La billetera debe persistir la reserva y el comprobante y poder sincronizar aunque la PC siga offline; no exigir conectividad simultánea de ambos equipos.
 - La aceptación local permanece pendiente de conciliación; verificar en el código los controles previstos en la Entrega 4 antes de declararlos implementados.
 
-## Estado implementado verificado al 13/10/2026
+## Estado implementado verificado al 14/10/2026
 
-- El contrato v2, la máquina APDU HCE, la persistencia Room 7 de solicitudes, reservas, autorizaciones y claves, y el aprovisionamiento autenticado compilan y tienen pruebas JVM.
+- El contrato v2, la máquina APDU HCE, la persistencia Room 8 de solicitudes, reservas, autorizaciones, claves y reintentos, y el aprovisionamiento autenticado compilan y tienen pruebas JVM.
 - La pantalla cliente recibe del POS el comercio y el importe, exige confirmación y descuenta reservas del saldo gastable; `SELECT` no genera pagos.
 - La sesión solo se restaura si conserva token, identificador y billetera local aprovisionada; cerrar sesión no elimina operaciones ni libera reservas.
-- La migración 5→7 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
+- La conciliación v2 usa una única cola WorkManager durable por billetera autenticada, procesa resultados individuales y conserva reservas ante evidencia pendiente, conflicto o error transitorio.
+- La migración 5→8 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
 - El POS de escritorio está implementado en el repositorio backend y el flujo simulado pasa; Android descarga sus claves públicas registradas. La interoperabilidad ACR122U/HCE continúa pendiente de hardware.
 
 ## Criterios de revisión del código
@@ -45,11 +46,11 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Compilación: `.\gradlew.bat :app:assembleDebug`.
 - Pruebas unitarias: `.\gradlew.bat :app:testDebugUnitTest`; análisis Android: `.\gradlew.bat :app:lintDebug`.
 - Pruebas instrumentadas: `.\gradlew.bat :app:connectedDebugAndroidTest`, con dispositivo o emulador compatible.
-- En la inspección inicial no había Java disponible en PATH; estos comandos no se ejecutaron y no acreditan compilación.
-- Los tests encontrados en `app/src/test/` y `app/src/androidTest/` son ejemplos básicos, no una suite de pagos.
+- Las verificaciones vigentes usan el JBR 21 de Android Studio y el SDK 36.1 local mediante `JAVA_HOME` y `ANDROID_HOME`; `local.properties` aún señala una ruta SDK inexistente.
+- La suite JVM vigente contiene 16 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
 
 ## Antes de terminar
 
 - Para cambios de pagos, probar según corresponda rechazo, duplicación, fallo de conexión, reintento y conservación de pendientes.
 - Para NFC/HCE, comprobar en hardware compatible ambos roles; el emulador o un build exitoso no valida el intercambio físico.
-- Informar qué flujo se verificó y qué queda pendiente; la elección del ACR122U está definida, pero el POS de PC y su interoperabilidad requieren evidencia de implementación y pruebas.
+- Informar qué flujo se verificó y qué queda pendiente; el POS de PC y la conciliación independiente están implementados, pero la interoperabilidad ACR122U/HCE requiere hardware y pruebas físicas.

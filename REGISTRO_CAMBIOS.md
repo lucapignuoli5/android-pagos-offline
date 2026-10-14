@@ -204,3 +204,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la prueba de migración instrumentada compiló pero no pudo ejecutarse por falta de dispositivo/emulador; operaciones QR/TCP heredadas se adaptan en la Fase 6.
 - **Commit:** `feat(sync): [TFG-F5-AN-01] conciliar operaciones v2 por resultado`
 - **Impacto académico:** implementa la conciliación independiente y conserva reservas hasta un resultado verificable.
+
+## TFG-F5-AN-02 — Revisión de cierre de conciliación Android
+
+- **Fecha:** 2026-10-14
+- **Fase:** 5 — Conciliación independiente
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** la fase debe revisarse completa y sin regresiones antes de adaptar QR/TCP y el lector móvil.
+- **Comportamiento anterior:** la cola v2 estaba implementada, pero las instrucciones seguían describiendo Room 7 y no registraban su alcance por billetera ni las limitaciones de ejecución.
+- **Comportamiento nuevo:** las instrucciones reflejan Room 8, cola por billetera, resultados individuales y límites de evidencia; el cierre conjunto confirma compatibilidad sin atribuir ejecución física.
+- **Decisión:** contrastar contratos, esquema Room, estados, reservas, reintentos y ambos órdenes de sincronización; no acreditar pruebas físicas inexistentes.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`; registro consolidado e instrucciones generales fuera del repositorio.
+- **Pruebas:** puerta final correcta: 16 pruebas JVM, APK debug, compilación de pruebas instrumentadas y lint; esquema Room 8 contrastado y estado Git revisado.
+- **Limitaciones:** sin dispositivo/emulador ni ACR122U.
+- **Commit:** `docs(review): [TFG-F5-AN-02] cerrar revision de conciliacion`
+- **Impacto académico:** diferencia la conciliación implementada y automatizada de la validación física pendiente.
