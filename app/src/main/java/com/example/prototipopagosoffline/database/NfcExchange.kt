@@ -26,7 +26,9 @@ data class NfcExchange(
     @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long,
     @ColumnInfo(name = "sync_attempts", defaultValue = "0") val syncAttempts: Int = 0,
     @ColumnInfo(name = "next_sync_at_epoch_seconds") val nextSyncAtEpochSeconds: Long? = null,
-    @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null
+    @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null,
+    @ColumnInfo(name = "request_expires_at_epoch_seconds") val requestExpiresAtEpochSeconds: Long? = null,
+    @ColumnInfo(name = "cancelled_at_epoch_seconds") val cancelledAtEpochSeconds: Long? = null
 )
 
 @Entity(tableName = "trusted_public_keys", indices = [Index(value = ["fingerprint"], unique = true)])

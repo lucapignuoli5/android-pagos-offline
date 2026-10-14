@@ -350,3 +350,14 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** conexión a persistencia Room y transportes HCE/NFC/TCP se completa en C3 y C5; hardware físico ACR122U e instrumentadas permanecen pendientes.
 - **Commit:** `feat(protocol): [TFG-C1-AN-01] definir mensajes v3 verificables`
 - **Impacto académico:** demuestra equivalencia e interoperabilidad cruzada Kotlin/Python sin depender de reconstrucción de payloads ni mutación de bytes firmados.
+## TFG-C3-AN-01 — Migración Room 10→11 y política de identidad local
+
+- **Fecha:** 2026-10-14
+- **Fase:** C3
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Requisito:** conservar pendientes y separar historial por cuenta sin backup o transferencia automática de identidad y pagos.
+- **Cambio:** Room pasa a versión 11 con migración aditiva para expiración/cancelación de solicitudes e identificación de billetera en historial; se mantiene la compatibilidad de Room 5→10. Android desactiva backup y transferencia de base, preferencias y archivos de pagos.
+- **Archivos:** `AppDatabase.kt`, `NfcExchange.kt`, `TransactionHistory.kt`, `AndroidManifest.xml`, `data_extraction_rules.xml`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** la migración debe validarse posteriormente con `MigrationTestHelper` sobre una fixture Room v5; no se acredita ejecución instrumentada.
+- **Commit:** `feat(android-db): [TFG-C3-AN-01] migrar Room 10 a 11 y bloquear backup de pagos`

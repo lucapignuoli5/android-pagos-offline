@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build().also { instance = it }
             }
         }
@@ -104,6 +104,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS mobile_pos_operations (operation_id TEXT NOT NULL PRIMARY KEY, request_envelope BLOB NOT NULL, receipt_envelope BLOB, ack_envelope BLOB, merchant_id TEXT NOT NULL, terminal_id TEXT NOT NULL, wallet_id TEXT, authorization_id TEXT, amount_cents INTEGER NOT NULL, state TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL, sync_attempts INTEGER NOT NULL DEFAULT 0, next_sync_at_epoch_seconds INTEGER, last_sync_code TEXT)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_mobile_pos_operations_state_created_at_epoch_seconds ON mobile_pos_operations(state, created_at_epoch_seconds)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_mobile_pos_operations_next_sync_at_epoch_seconds ON mobile_pos_operations(next_sync_at_epoch_seconds)")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN request_expires_at_epoch_seconds INTEGER")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN cancelled_at_epoch_seconds INTEGER")
+                db.execSQL("ALTER TABLE transaction_history ADD COLUMN wallet_id TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transaction_history_wallet_id ON transaction_history(wallet_id)")
             }
         }
     }

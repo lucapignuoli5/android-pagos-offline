@@ -36,6 +36,7 @@ data class TransactionHistory(
 
     @ColumnInfo(name = "is_outgoing")
     val isOutgoing: Boolean = false,
+    @ColumnInfo(name = "wallet_id") val walletId: String? = null,
 
     @Transient
     @ColumnInfo(name = "estado_sincronizacion")
