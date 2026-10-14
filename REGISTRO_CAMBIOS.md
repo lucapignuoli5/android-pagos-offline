@@ -219,3 +219,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** sin dispositivo/emulador ni ACR122U.
 - **Commit:** `docs(review): [TFG-F5-AN-02] cerrar revision de conciliacion`
 - **Impacto académico:** diferencia la conciliación implementada y automatizada de la validación física pendiente.
+
+## TFG-F6-AN-01 — Aprovisionar identidad del comercio móvil
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos móviles secundarios e integraciones
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** QR/TCP y el lector NFC móvil no pueden emitir solicitudes v2 verificables sin sesión de comercio, terminal y clave POS registrada.
+- **Comportamiento anterior:** el rol comercio se abría sin autenticación y usaba contratos heredados con claves incluidas por el emisor.
+- **Comportamiento nuevo:** el acceso comercio usa credenciales externas, registra una clave P-256 de terminal con prueba de posesión, descarga claves de billetera y guarda sesión/terminal en Room 9. El arranque restaura cada rol solo si existe su aprovisionamiento local; las búsquedas de claves confiables también exigen el propósito esperado.
+- **Decisión:** mantener los flujos secundarios, pero exigir aprovisionamiento online previo y persistir identidad/clave del terminal en Room sin incorporar credenciales al repositorio.
+- **Archivos:** `app/build.gradle.kts`, `gradle.properties`, `MainActivity.kt`, `database/AppDatabase.kt`, `database/MobileTerminal.kt`, `database/MobileTerminalDao.kt`, `database/NfcExchangeDao.kt`, `protocol/RoomNfcExchangeStore.kt`, `utils/TokenManager.kt`, `utils/TerminalKeyManager.kt`, `utils/MerchantProvisioner.kt`, esquema Room 9, pruebas, `AGENTS.md` y `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** sesión local por rol, registro de clave POS, directorio de claves de billetera y migración Room 8→9.
+- **Pruebas:** 17 pruebas JVM, APK debug, compilación de pruebas instrumentadas y lint correctos; el esquema Room 9 coincide con la migración y la prueba canónica vincula usuario, terminal, clave, huella, nonce e instante.
+- **Limitaciones:** la ejecución con Android Keystore requiere dispositivo/emulador.
+- **Commit:** `feat(merchant): [TFG-F6-AN-01] aprovisionar terminal movil`
+- **Impacto académico:** permite presentar QR/TCP y NFC móvil como transportes del contrato v2, no como comprobantes autocontenidos inseguros.

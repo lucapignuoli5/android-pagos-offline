@@ -35,6 +35,20 @@ android {
             .replace("\"", "\\\"")
         buildConfigField("String", "DEMO_USERNAME", "\"$demoUsername\"")
         buildConfigField("String", "DEMO_PASSWORD", "\"$demoPassword\"")
+        val merchantUsername = providers.gradleProperty("DEMO_MERCHANT_USERNAME")
+            .orElse(providers.environmentVariable("DEMO_MERCHANT_USERNAME"))
+            .orElse("")
+            .get()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        val merchantPassword = providers.gradleProperty("DEMO_MERCHANT_PASSWORD")
+            .orElse(providers.environmentVariable("DEMO_MERCHANT_PASSWORD"))
+            .orElse("")
+            .get()
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "DEMO_MERCHANT_USERNAME", "\"$merchantUsername\"")
+        buildConfigField("String", "DEMO_MERCHANT_PASSWORD", "\"$merchantPassword\"")
     }
 
     buildTypes {

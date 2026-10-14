@@ -95,16 +95,29 @@ class MainActivity : AppCompatActivity() {
                     val tokenManager = TokenManager(context)
                     val savedToken = tokenManager.getToken()
                     val savedWalletId = tokenManager.getWalletId()
+                    val savedTerminalId = tokenManager.getTerminalId()
+                    val savedUserId = tokenManager.getUserId()
+                    val savedRole = tokenManager.getRole()
+                    val database = AppDatabase.getInstance(context)
 
                     val hasLocalWallet = savedWalletId?.let {
-                        AppDatabase.getInstance(context).walletDao().getWalletById(it) != null
+                        database.walletDao().getWalletById(it) != null
                     } == true
-                    if (!savedToken.isNullOrEmpty() && hasLocalWallet) {
-                        // Si ya hay sesión guardada, entra directo offline como cliente
+                    val hasLocalTerminal = if (savedTerminalId != null && savedUserId != null) {
+                        database.mobileTerminalDao().getById(savedTerminalId)?.userId == savedUserId
+                    } else false
+                    if (!savedToken.isNullOrEmpty() && savedRole == "cliente" && hasLocalWallet) {
                         com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                         currentRole = UserRole.CLIENTE
                         currentScreen = AppScreen.HOME
-                    } else if (!savedToken.isNullOrEmpty() || !savedWalletId.isNullOrEmpty()) {
+                    } else if (!savedToken.isNullOrEmpty() && savedRole == "comercio" && hasLocalTerminal) {
+                        com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                        currentRole = UserRole.COMERCIO
+                        currentScreen = AppScreen.HOME
+                    } else if (
+                        !savedToken.isNullOrEmpty() || !savedWalletId.isNullOrEmpty() ||
+                        !savedTerminalId.isNullOrEmpty() || savedRole != null
+                    ) {
                         tokenManager.clearToken()
                     }
                     isInitialized = true
@@ -806,7 +819,73 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(24.dp))
 
         Button(
-            onClick = { onRoleSelected(UserRole.COMERCIO) },
+            onClick = {
+                isLoading = true
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        if (
+                            BuildConfig.DEMO_MERCHANT_USERNAME.isBlank() ||
+                            BuildConfig.DEMO_MERCHANT_PASSWORD.isBlank()
+                        ) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                isLoading = false
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Credenciales de comercio no configuradas",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            return@launch
+                        }
+                        val response = com.example.prototipopagosoffline.network.RetrofitClient.apiService.login(
+                            com.example.prototipopagosoffline.network.LoginRequest(
+                                BuildConfig.DEMO_MERCHANT_USERNAME,
+                                BuildConfig.DEMO_MERCHANT_PASSWORD
+                            )
+                        )
+                        if (!response.isSuccessful || response.body() == null) {
+                            error("Credenciales de comercio invalidas")
+                        }
+                        val login = response.body()!!
+                        val tokenManager = TokenManager(context)
+                        tokenManager.saveToken(login.access_token)
+                        try {
+                            val terminal = com.example.prototipopagosoffline.utils.MerchantProvisioner(
+                                AppDatabase.getInstance(context),
+                                com.example.prototipopagosoffline.network.RetrofitClient.apiService
+                            ).provision(login)
+                            check(
+                                tokenManager.saveMerchantSession(
+                                    login.access_token,
+                                    terminal.terminalId,
+                                    login.user_id
+                                )
+                            ) { "No se pudo guardar la sesion de comercio" }
+                        } catch (error: Exception) {
+                            tokenManager.clearToken()
+                            throw error
+                        }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            isLoading = false
+                            android.widget.Toast.makeText(
+                                context,
+                                "Comercio aprovisionado",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                            onRoleSelected(UserRole.COMERCIO)
+                        }
+                    } catch (_: Exception) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            isLoading = false
+                            android.widget.Toast.makeText(
+                                context,
+                                "No se pudo iniciar el comercio",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(64.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
             enabled = !isLoading

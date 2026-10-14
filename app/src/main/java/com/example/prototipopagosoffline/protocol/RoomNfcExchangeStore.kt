@@ -53,7 +53,16 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
 
 }
 
-class RoomTrustedPublicKeyResolver(private val database: AppDatabase) : TrustedPublicKeyResolver {
+class RoomTrustedPublicKeyResolver(
+    private val database: AppDatabase,
+    private val ownerType: String = "pos"
+) : TrustedPublicKeyResolver {
+    init {
+        require(ownerType == "pos" || ownerType == "wallet")
+    }
+
     override suspend fun resolve(keyId: String, fingerprint: String): String? =
-        database.nfcExchangeDao().getActiveTrustedKey(keyId, fingerprint)?.publicKeyBase64
+        database.nfcExchangeDao()
+            .getActiveTrustedKey(keyId, fingerprint, ownerType)
+            ?.publicKeyBase64
 }

@@ -22,6 +22,17 @@ class TokenManager(context: Context) {
             .putString("jwt_token", token)
             .putString("wallet_id", walletId)
             .putInt("user_id", userId)
+            .putString("session_role", "cliente")
+            .remove("terminal_id")
+            .commit()
+
+    fun saveMerchantSession(token: String, terminalId: String, userId: Int): Boolean =
+        sharedPreferences.edit()
+            .putString("jwt_token", token)
+            .putString("terminal_id", terminalId)
+            .putInt("user_id", userId)
+            .putString("session_role", "comercio")
+            .remove("wallet_id")
             .commit()
 
     fun saveToken(token: String) {
@@ -37,6 +48,10 @@ class TokenManager(context: Context) {
     fun getWalletId(): String? = sharedPreferences.getString("wallet_id", null)?.takeIf { it.isNotBlank() }
 
     fun getUserId(): Int? = sharedPreferences.getInt("user_id", -1).takeIf { it > 0 }
+
+    fun getRole(): String? = sharedPreferences.getString("session_role", null)
+
+    fun getTerminalId(): String? = sharedPreferences.getString("terminal_id", null)?.takeIf { it.isNotBlank() }
 
     fun clearToken() {
         sharedPreferences.edit().clear().commit()

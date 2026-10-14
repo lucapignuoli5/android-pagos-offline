@@ -49,6 +49,10 @@ interface NfcExchangeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)
 
-    @Query("SELECT * FROM trusted_public_keys WHERE key_id = :keyId AND fingerprint = :fingerprint AND revoked = 0 LIMIT 1")
-    suspend fun getActiveTrustedKey(keyId: String, fingerprint: String): TrustedPublicKey?
+    @Query("SELECT * FROM trusted_public_keys WHERE key_id = :keyId AND fingerprint = :fingerprint AND owner_type = :ownerType AND revoked = 0 LIMIT 1")
+    suspend fun getActiveTrustedKey(
+        keyId: String,
+        fingerprint: String,
+        ownerType: String
+    ): TrustedPublicKey?
 }

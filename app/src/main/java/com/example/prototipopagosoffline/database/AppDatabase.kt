@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NfcExchange::class,
         TrustedPublicKey::class,
         LocalOfflineAuthorization::class,
-        WalletKeyMetadata::class
+        WalletKeyMetadata::class,
+        MobileTerminal::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -29,6 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun nfcExchangeDao(): NfcExchangeDao
 
     abstract fun authorizationDao(): AuthorizationDao
+
+    abstract fun mobileTerminalDao(): MobileTerminalDao
 
     companion object {
         private const val DATABASE_NAME = "offline_payments.db"
@@ -43,7 +46,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .build().also { instance = it }
             }
         }
@@ -82,6 +85,14 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN next_sync_at_epoch_seconds INTEGER")
                 db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN last_sync_code TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_nfc_exchanges_next_sync_at_epoch_seconds ON nfc_exchanges(next_sync_at_epoch_seconds)")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS mobile_terminals (terminal_id TEXT NOT NULL PRIMARY KEY, merchant_id TEXT NOT NULL, user_id INTEGER NOT NULL, pos_key_id TEXT NOT NULL, pos_key_fingerprint TEXT NOT NULL, keystore_alias TEXT NOT NULL, public_key_b64 TEXT NOT NULL, created_at_epoch_seconds INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mobile_terminals_user_id ON mobile_terminals(user_id)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mobile_terminals_pos_key_id ON mobile_terminals(pos_key_id)")
             }
         }
     }
