@@ -299,3 +299,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** la revisión automatizada no sustituye pruebas físicas entre dispositivos ni con ACR122U; las recargas externas reales no se ejecutaron y continúan fuera de la demostración.
 - **Commit:** `fix(review): [TFG-F6-RV-01] cerrar integraciones moviles seguras`
 - **Impacto académico:** permite describir los canales secundarios como implementación comprobada en código y simuladores, separada de la evidencia física pendiente.
+
+## TFG-F7-AN-01 — Consolidar evidencia final Android
+
+- **Fecha:** 2026-10-14
+- **Fase:** 7 — Evidencia final y documentación académica
+- **Estado:** COMPROBADO
+- **Hallazgo o requisito:** repetir compilación, pruebas y lint con el entorno identificado, y ejecutar instrumentadas y NFC físico solo cuando existan dispositivos compatibles.
+- **Comportamiento anterior:** cada fase tenía evidencia propia, pero faltaba un cierre final con inventario explícito del entorno disponible.
+- **Comportamiento nuevo:** el cierre identifica JBR 21.0.10, repite suite JVM, APK, compilación instrumentada y lint, y registra por consulta directa que ADB no tiene dispositivos y Windows no presenta lectores de tarjetas inteligentes.
+- **Decisión:** ejecutar la suite JVM, APK, compilación instrumentada y lint con JBR 21/SDK local; consultar ADB y hardware antes de atribuir pruebas físicas.
+- **Archivos:** `AGENTS.md`, `REGISTRO_CAMBIOS.md`; no cambia código Android en esta unidad.
+- **Contratos o datos afectados:** ninguno.
+- **Pruebas:** 24 pruebas JVM, APK debug, compilación de pruebas instrumentadas y lint correctos con JBR 21.0.10 y SDK 36.1 configurado mediante `ANDROID_HOME`; ADB informó cero dispositivos y Windows cero lectores presentes.
+- **Limitaciones:** la ausencia comprobada de dispositivo, emulador o ACR122U impide ejecutar pruebas instrumentadas y de interoperabilidad; `local.properties` conserva una ruta SDK inexistente, compensada en las verificaciones mediante `ANDROID_HOME`.
+- **Commit:** `test(evidence): [TFG-F7-AN-01] consolidar verificacion android`
+- **Impacto académico:** diferencia evidencia de compilación/simulación de la validación física pendiente.

@@ -52,6 +52,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Pruebas instrumentadas: `.\gradlew.bat :app:connectedDebugAndroidTest`, con dispositivo o emulador compatible.
 - Las verificaciones vigentes usan el JBR 21 de Android Studio y el SDK 36.1 local mediante `JAVA_HOME` y `ANDROID_HOME`; `local.properties` aún señala una ruta SDK inexistente.
 - La suite JVM vigente contiene 24 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
+- El cierre de evidencia de Fase 7 repitió suite, APK, compilación instrumentada y lint con JBR 21.0.10; ADB no encontró dispositivos y Windows no encontró un lector de tarjetas inteligentes presente.
 
 ## Antes de terminar
 
