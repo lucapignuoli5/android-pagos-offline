@@ -137,6 +137,8 @@ enum class SaveResult { INSERTED, IDENTICAL, CONFLICT }
 
 enum class ExchangeState {
     REQUEST_RECEIVED,
+    REQUEST_EXPIRED,
+    CANCELLED,
     RESERVED,
     DELIVERY_UNCERTAIN,
     LOCALLY_ACCEPTED,

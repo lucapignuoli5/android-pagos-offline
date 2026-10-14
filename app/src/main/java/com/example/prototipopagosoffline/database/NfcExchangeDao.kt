@@ -14,7 +14,13 @@ interface NfcExchangeDao {
     @Query("SELECT * FROM nfc_exchanges WHERE operation_id = :operationId LIMIT 1")
     suspend fun getExchange(operationId: String): NfcExchange?
 
-    @Query("SELECT * FROM nfc_exchanges WHERE state = 'REQUEST_RECEIVED' ORDER BY created_at_epoch_seconds ASC LIMIT 1")
+    @Query("UPDATE nfc_exchanges SET state = 'REQUEST_EXPIRED' WHERE state = 'REQUEST_RECEIVED' AND receipt_envelope IS NULL AND request_expires_at_epoch_seconds IS NOT NULL AND request_expires_at_epoch_seconds <= :now")
+    suspend fun expirePendingRequests(now: Long): Int
+
+    @Query("UPDATE nfc_exchanges SET state = 'CANCELLED', cancelled_at_epoch_seconds = :now WHERE operation_id = :operationId AND state = 'REQUEST_RECEIVED' AND receipt_envelope IS NULL")
+    suspend fun cancelBeforeReceipt(operationId: String, now: Long): Int
+
+    @Query("SELECT * FROM nfc_exchanges WHERE state = 'REQUEST_RECEIVED' AND (request_expires_at_epoch_seconds IS NULL OR request_expires_at_epoch_seconds > strftime('%s','now')) ORDER BY created_at_epoch_seconds ASC LIMIT 1")
     fun observeOldestPendingRequest(): Flow<NfcExchange?>
 
     @Query("UPDATE nfc_exchanges SET receipt_envelope = :receipt, state = 'RESERVED', wallet_id = :walletId, authorization_id = :authorizationId, amount_cents = :amount, merchant_id = :merchantId, terminal_id = :terminalId WHERE operation_id = :operationId AND state = 'REQUEST_RECEIVED' AND receipt_envelope IS NULL")

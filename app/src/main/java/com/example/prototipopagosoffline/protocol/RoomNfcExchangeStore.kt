@@ -3,6 +3,7 @@ package com.example.prototipopagosoffline.protocol
 import androidx.room.withTransaction
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.database.NfcExchange
+import java.time.Instant
 
 class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore {
     private val dao = database.nfcExchangeDao()
@@ -12,12 +13,17 @@ class RoomNfcExchangeStore(private val database: AppDatabase) : NfcExchangeStore
             val existing = dao.getExchange(operationId)
             when {
                 existing == null -> {
+                    val expiresAt = ProtocolV2.parseSignedEnvelope(signedEnvelope)
+                        .payload["expires_at"]?.asString
+                        ?.let(Instant::parse)
+                        ?.epochSecond
                     dao.insertExchange(
                         NfcExchange(
                             operationId = operationId,
                             requestEnvelope = signedEnvelope,
                             state = ExchangeState.REQUEST_RECEIVED.name,
-                            createdAtEpochSeconds = System.currentTimeMillis() / 1000
+                            createdAtEpochSeconds = System.currentTimeMillis() / 1000,
+                            requestExpiresAtEpochSeconds = expiresAt
                         )
                     )
                     SaveResult.INSERTED

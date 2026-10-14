@@ -27,7 +27,10 @@ class OfflinePaymentCoordinator(
         require(request["type"].asString == "payment_request")
         require(request["operation_id"].asString == operationId)
         val expiresAt = Instant.parse(request["expires_at"].asString)
-        require(expiresAt.isAfter(now())) { "Solicitud vencida" }
+        if (!expiresAt.isAfter(now())) {
+            database.nfcExchangeDao().expirePendingRequests(now().epochSecond)
+            throw IllegalStateException("Solicitud vencida")
+        }
         require(request["amount_cents"].asLong > 0)
         require(request["currency"].asString == ProtocolV2.CURRENCY)
         require(walletId.isNotBlank())
@@ -86,6 +89,11 @@ class OfflinePaymentCoordinator(
     }
 
     suspend fun registerWalletKey(walletId: String, keyId: String): WalletKeyMaterial {
+        val existing = database.authorizationDao().getKeyMetadata(walletId, keyId)
+        if (existing != null && !keyManager.hasKey(existing.keyStoreAlias)) {
+            database.authorizationDao().retireKey(walletId, keyId)
+            throw IllegalStateException("La clave local fue eliminada; la billetera requiere recuperación y una identidad nueva")
+        }
         val material = keyManager.ensureKey(walletId, keyId)
         database.authorizationDao().insertKeyMetadata(
             WalletKeyMetadata(
@@ -99,6 +107,9 @@ class OfflinePaymentCoordinator(
         )
         return material
     }
+
+    suspend fun cancelPendingRequest(operationId: String): Boolean =
+        database.nfcExchangeDao().cancelBeforeReceipt(operationId, now().epochSecond) == 1
 
     fun signWithWalletKey(alias: String, payloadBytes: ByteArray): String =
         keyManager.sign(alias, payloadBytes)

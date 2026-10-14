@@ -64,3 +64,6 @@ class WalletKeyManager {
         .digest(value)
         .joinToString("") { "%02x".format(it) }
 }
+    fun hasKey(alias: String): Boolean = KeyStore.getInstance(keyStoreName).apply { load(null) }
+        .containsAlias(alias)
+

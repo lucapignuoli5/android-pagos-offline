@@ -361,3 +361,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** la migración debe validarse posteriormente con `MigrationTestHelper` sobre una fixture Room v5; no se acredita ejecución instrumentada.
 - **Commit:** `feat(android-db): [TFG-C3-AN-01] migrar Room 10 a 11 y bloquear backup de pagos`
+## TFG-C3-AN-02 — Recuperación de identidad y solicitudes previas a emisión
+
+- **Fecha:** 2026-10-14
+- **Fase:** C3
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** una clave ya registrada que desapareció del Keystore se retira y fuerza recuperación en vez de regenerarse con el mismo ID; las solicitudes guardan vencimiento y solo pueden expirar o cancelarse antes de emitir comprobante; el historial ofrece consultas por billetera y separa registros heredados sin propietario.
+- **Archivos:** DAO de autorización, NFC e historial; `WalletKeyManager.kt`, `OfflinePaymentCoordinator.kt`, `RoomNfcExchangeStore.kt`, `NfcProtocolEngine.kt`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** schema Room 11 y ejecución de migración quedan para la etapa de validación agrupada.
+- **Commit:** `feat(android-state): [TFG-C3-AN-02] completar recuperación y estados previos`

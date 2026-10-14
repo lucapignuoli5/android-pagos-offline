@@ -16,6 +16,9 @@ interface AuthorizationDao {
     @Query("SELECT * FROM wallet_key_metadata WHERE key_id = :keyId AND wallet_id = :walletId LIMIT 1")
     suspend fun getKeyMetadata(walletId: String, keyId: String): WalletKeyMetadata?
 
+    @Query("UPDATE wallet_key_metadata SET retired = 1 WHERE key_id = :keyId AND wallet_id = :walletId")
+    suspend fun retireKey(walletId: String, keyId: String): Int
+
     @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND active = 1 AND issued_at_epoch_seconds <= :now AND expires_at_epoch_seconds >= :expiresAt AND max_payment_cents >= :amount AND remaining_amount_cents >= :amount AND remaining_payments > 0 ORDER BY expires_at_epoch_seconds ASC LIMIT 1")
     suspend fun findEligible(walletId: String, amount: Long, now: Long, expiresAt: Long): LocalOfflineAuthorization?
 

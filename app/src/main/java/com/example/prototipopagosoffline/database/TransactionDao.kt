@@ -16,6 +16,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transaction_history ORDER BY timestamp DESC")
     suspend fun getAllTransactions(): List<TransactionHistory>
 
+    @Query("SELECT * FROM transaction_history WHERE wallet_id = :walletId ORDER BY timestamp DESC")
+    suspend fun getTransactionsForWallet(walletId: String): List<TransactionHistory>
+
+    @Query("SELECT * FROM transaction_history WHERE wallet_id IS NULL ORDER BY timestamp DESC")
+    suspend fun getUnownedLegacyTransactions(): List<TransactionHistory>
+
     @Query("SELECT * FROM transaction_history WHERE estado_sincronizacion = :syncState ORDER BY timestamp ASC")
     suspend fun getTransactionsBySyncState(syncState: SyncState): List<TransactionHistory>
 
