@@ -104,6 +104,19 @@ data class OfflinePaymentResultV3(
 
 data class OfflinePaymentSyncV3Response(val results: List<OfflinePaymentResultV3>)
 
+data class LegacyInventoryEntry(
+    val operation_id: String,
+    val authorization_id: String,
+    val receipt_digest: String
+)
+
+data class LegacyInventoryRequest(
+    val wallet_id: String,
+    val operations: List<LegacyInventoryEntry>
+)
+
+data class LegacyInventoryResponse(val wallet_id: String, val imported: Int, val total: Int)
+
 data class OfflineAuthorizationCloseRequest(
     val close_envelope_b64: String,
     val manifest_b64: String

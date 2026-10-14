@@ -458,3 +458,18 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** no se afirma compilación, migración, ejecución en teléfonos ni interoperabilidad física.
 - **Commit:** `docs(corrections): [TFG-C7-DOC-02] cerrar programacion android pendiente`
 - **Impacto académico:** ofrece una fuente vigente sin modificar la Entrega 4 presentada.
+
+## TFG-C3-AN-04 — Registrar inventario histórico v2
+
+- **Fecha:** 2026-10-14
+- **Fase:** C3
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Requisito:** inventariar comprobantes v2 conservados antes de conciliarlos mediante compatibilidad histórica.
+- **Anterior:** los comprobantes locales v2 no tenían constancia durable de haber sido registrados en el inventario del servidor.
+- **Nuevo:** Room 16 identifica cada comprobante histórico pendiente; durante el aprovisionamiento autenticado envía lotes acotados con UUID, autorización y digest, y marca localmente solo los lotes aceptados por completo.
+- **Archivos:** `database/AppDatabase.kt`, `NfcExchange.kt`, `NfcExchangeDao.kt`, `network/ApiService.kt`, `SyncItem.kt`, `utils/OfflineProvisioner.kt` y `REGISTRO_CAMBIOS.md`.
+- **Contratos/datos:** migración aditiva Room 15→16 con `legacy_inventory_registered`; consumo de `/api/v3/legacy-inventory`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** requiere que el operador abra temporalmente la ventana de inventario del backend; compilación, migración y datos históricos reales quedan pendientes.
+- **Commit:** `feat(migration): [TFG-C3-AN-04] registrar inventario v2`
+- **Impacto académico:** conserva bytes y firmas históricas sin convertir pagos v2 en operaciones nuevas.

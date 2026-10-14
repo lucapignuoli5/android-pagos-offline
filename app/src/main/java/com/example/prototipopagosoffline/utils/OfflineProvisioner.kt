@@ -7,6 +7,8 @@ import com.example.prototipopagosoffline.database.OfflineWallet
 import com.example.prototipopagosoffline.database.TrustedPublicKey
 import com.example.prototipopagosoffline.network.ApiService
 import com.example.prototipopagosoffline.network.KeyRegistrationRequest
+import com.example.prototipopagosoffline.network.LegacyInventoryEntry
+import com.example.prototipopagosoffline.network.LegacyInventoryRequest
 import com.example.prototipopagosoffline.network.LoginResponse
 import com.example.prototipopagosoffline.network.OfflineAuthorizationRequest
 import com.example.prototipopagosoffline.protocol.ProtocolV2
@@ -61,6 +63,8 @@ class OfflineProvisioner(
                 )
             }
         }
+
+        registerLegacyInventory(login.wallet_id)
 
         val balanceResponse = api.getWalletBalance(login.wallet_id)
         require(balanceResponse.isSuccessful) { "No se pudo consultar el saldo" }
@@ -130,6 +134,28 @@ class OfflineProvisioner(
         check(database.walletDao().updateConfirmedBalance(
             walletId, confirmedBalance, ProtocolV2.CURRENCY
         ) == 1)
+    }
+
+    private suspend fun registerLegacyInventory(walletId: String) {
+        while (true) {
+            val pending = database.nfcExchangeDao().getLegacyInventoryPending(walletId, 100)
+            if (pending.isEmpty()) return
+            val entries = pending.map { exchange ->
+                val receipt = ProtocolV2.parseSignedEnvelope(requireNotNull(exchange.receiptEnvelope))
+                LegacyInventoryEntry(
+                    operation_id = exchange.operationId,
+                    authorization_id = requireNotNull(exchange.authorizationId),
+                    receipt_digest = ProtocolV2.payloadDigest(receipt.payload)
+                )
+            }
+            val response = api.registerLegacyInventory(LegacyInventoryRequest(walletId, entries))
+            require(response.isSuccessful && response.body()?.total == entries.size) {
+                "No se pudo registrar el inventario historico v2"
+            }
+            check(database.nfcExchangeDao().markLegacyInventoryRegistered(
+                pending.map { it.operationId }
+            ) == pending.size)
+        }
     }
 
     private fun registrationNonce(): String {

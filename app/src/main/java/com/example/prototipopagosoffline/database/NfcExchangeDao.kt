@@ -58,6 +58,12 @@ interface NfcExchangeDao {
     @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId ORDER BY created_at_epoch_seconds DESC LIMIT :limit")
     suspend fun getHistoryForWallet(walletId: String, limit: Int = 100): List<NfcExchange>
 
+    @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId AND authorization_id IN (SELECT id FROM local_offline_authorizations WHERE authorization_envelope IS NULL) AND receipt_envelope IS NOT NULL AND legacy_inventory_registered = 0 ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
+    suspend fun getLegacyInventoryPending(walletId: String, limit: Int = 100): List<NfcExchange>
+
+    @Query("UPDATE nfc_exchanges SET legacy_inventory_registered = 1 WHERE operation_id IN (:operationIds)")
+    suspend fun markLegacyInventoryRegistered(operationIds: List<String>): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)
 

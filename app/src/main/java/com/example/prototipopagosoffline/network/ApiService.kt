@@ -39,6 +39,11 @@ interface ApiService {
         @Body request: OfflinePaymentSyncV3Request
     ): Response<OfflinePaymentSyncV3Response>
 
+    @POST("/api/v3/legacy-inventory")
+    suspend fun registerLegacyInventory(
+        @Body request: LegacyInventoryRequest
+    ): Response<LegacyInventoryResponse>
+
     @POST("/api/v3/offline-authorizations/{authorizationId}/close")
     suspend fun closeOfflineAuthorizationV3(
         @Path("authorizationId") authorizationId: String,

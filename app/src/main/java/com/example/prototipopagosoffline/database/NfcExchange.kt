@@ -28,7 +28,8 @@ data class NfcExchange(
     @ColumnInfo(name = "next_sync_at_epoch_seconds") val nextSyncAtEpochSeconds: Long? = null,
     @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null,
     @ColumnInfo(name = "request_expires_at_epoch_seconds") val requestExpiresAtEpochSeconds: Long? = null,
-    @ColumnInfo(name = "cancelled_at_epoch_seconds") val cancelledAtEpochSeconds: Long? = null
+    @ColumnInfo(name = "cancelled_at_epoch_seconds") val cancelledAtEpochSeconds: Long? = null,
+    @ColumnInfo(name = "legacy_inventory_registered", defaultValue = "0") val legacyInventoryRegistered: Boolean = false
 )
 
 @Entity(
