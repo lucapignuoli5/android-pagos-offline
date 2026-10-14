@@ -38,7 +38,7 @@ object QrTcpProtocol {
     fun encodeDescriptor(host: String, port: Int, requestEnvelope: ByteArray): String {
         requireValidHost(host)
         require(port in 1..65535)
-        val request = ProtocolV2.parseSignedEnvelope(requestEnvelope)
+        val request = ProtocolV3.parseSignedEnvelope(requestEnvelope)
         require(request.payload["type"].asString == "payment_request")
         val operationId = request.payload["operation_id"].asString
         val value = JsonObject().apply {
@@ -47,7 +47,7 @@ object QrTcpProtocol {
             addProperty("port", port)
             addProperty("request_envelope_b64", Base64.getEncoder().encodeToString(requestEnvelope))
             addProperty("transport", "tcp")
-            addProperty("version", ProtocolV2.VERSION)
+            addProperty("version", ProtocolV3.VERSION)
         }
         val encoded = canonicalTransportJson(value)
         require(encoded.toByteArray(Charsets.UTF_8).size <= MAX_QR_BYTES) { "Solicitud demasiado grande para QR" }
@@ -57,29 +57,45 @@ object QrTcpProtocol {
     fun decodeDescriptor(text: String): QrPaymentDescriptor {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_QR_BYTES) { "QR demasiado grande" }
         val value = parseObject(text, DESCRIPTOR_FIELDS)
-        require(strictInt(value, "version") == ProtocolV2.VERSION)
+        require(strictInt(value, "version") == ProtocolV3.VERSION)
         require(strictString(value, "transport") == "tcp")
         val host = strictString(value, "host").also(::requireValidHost)
         val port = strictInt(value, "port").also { require(it in 1..65535) }
         val operationId = canonicalOperationId(strictString(value, "operation_id"))
         val requestEnvelope = decodeEnvelope(value, "request_envelope_b64")
-        val request = ProtocolV2.parseSignedEnvelope(requestEnvelope)
+        val request = ProtocolV3.parseSignedEnvelope(requestEnvelope)
         require(request.payload["type"].asString == "payment_request")
         require(request.payload["operation_id"].asString == operationId)
         return QrPaymentDescriptor(host, port, operationId, requestEnvelope)
     }
 
     fun encodeReceipt(operationId: String, envelope: ByteArray): String =
-        encodeFrame("payment_receipt", operationId, "receipt_envelope_b64", envelope)
+        encodeFrame("payment_receipt", operationId, "receipt_envelope_b64", envelope, MessageTypeV3.PAYMENT_RECEIPT)
 
     fun decodeReceipt(text: String): Pair<String, ByteArray> =
-        decodeFrame(text, "payment_receipt", "receipt_envelope_b64", MessageType.PAYMENT_RECEIPT)
+        decodeFrame(text, "payment_receipt", "receipt_envelope_b64", MessageTypeV3.PAYMENT_RECEIPT)
+
+    fun encodeAuthorization(operationId: String, envelope: ByteArray): String {
+        canonicalOperationId(operationId)
+        val parsed = ProtocolV3.parseSignedEnvelope(envelope)
+        require(ProtocolV3.validatePayload(parsed.payload) == MessageTypeV3.OFFLINE_AUTHORIZATION)
+        return encodeTransportEnvelope("offline_authorization", operationId, "authorization_envelope_b64", envelope)
+    }
+
+    fun decodeAuthorization(text: String): Pair<String, ByteArray> {
+        val (operationId, envelope) = decodeTransportEnvelope(
+            text, "offline_authorization", "authorization_envelope_b64"
+        )
+        require(ProtocolV3.validatePayload(ProtocolV3.parseSignedEnvelope(envelope).payload) ==
+            MessageTypeV3.OFFLINE_AUTHORIZATION)
+        return operationId to envelope
+    }
 
     fun encodeAck(operationId: String, envelope: ByteArray): String =
-        encodeFrame("payment_ack", operationId, "ack_envelope_b64", envelope)
+        encodeFrame("payment_ack", operationId, "ack_envelope_b64", envelope, MessageTypeV3.PAYMENT_ACK)
 
     fun decodeAck(text: String): Pair<String, ByteArray> =
-        decodeFrame(text, "payment_ack", "ack_envelope_b64", MessageType.PAYMENT_ACK)
+        decodeFrame(text, "payment_ack", "ack_envelope_b64", MessageTypeV3.PAYMENT_ACK)
 
     fun readLine(input: InputStream, maximumBytes: Int = MAX_TCP_LINE_BYTES): String {
         require(maximumBytes in 1..MAX_TCP_LINE_BYTES)
@@ -115,16 +131,23 @@ object QrTcpProtocol {
         return cents
     }
 
-    private fun encodeFrame(type: String, operationId: String, field: String, envelope: ByteArray): String {
+    private fun encodeFrame(type: String, operationId: String, field: String, envelope: ByteArray,
+                            messageType: MessageTypeV3): String {
         canonicalOperationId(operationId)
-        val parsed = ProtocolV2.parseSignedEnvelope(envelope)
+        val parsed = ProtocolV3.parseSignedEnvelope(envelope)
+        require(ProtocolV3.validatePayload(parsed.payload) == messageType)
         require(parsed.payload["operation_id"].asString == operationId)
         require(parsed.payload["type"].asString == type)
+        return encodeTransportEnvelope(type, operationId, field, envelope)
+    }
+
+    private fun encodeTransportEnvelope(type: String, operationId: String, field: String,
+                                        envelope: ByteArray): String {
         val value = JsonObject().apply {
             addProperty(field, Base64.getEncoder().encodeToString(envelope))
             addProperty("operation_id", operationId)
             addProperty("type", type)
-            addProperty("version", ProtocolV2.VERSION)
+            addProperty("version", ProtocolV3.VERSION)
         }
         return canonicalTransportJson(value).also {
             require(it.toByteArray(Charsets.UTF_8).size <= MAX_TCP_LINE_BYTES)
@@ -135,17 +158,23 @@ object QrTcpProtocol {
         text: String,
         expectedType: String,
         field: String,
-        messageType: MessageType
+        messageType: MessageTypeV3
     ): Pair<String, ByteArray> {
+        val (operationId, envelope) = decodeTransportEnvelope(text, expectedType, field)
+        val parsed = ProtocolV3.parseSignedEnvelope(envelope)
+        require(ProtocolV3.validatePayload(parsed.payload) == messageType)
+        require(parsed.payload["operation_id"].asString == operationId)
+        return operationId to envelope
+    }
+
+    private fun decodeTransportEnvelope(text: String, expectedType: String,
+                                        field: String): Pair<String, ByteArray> {
         require(text.toByteArray(Charsets.UTF_8).size <= MAX_TCP_LINE_BYTES)
         val value = parseObject(text, setOf("version", "type", "operation_id", field))
-        require(strictInt(value, "version") == ProtocolV2.VERSION)
+        require(strictInt(value, "version") == ProtocolV3.VERSION)
         require(strictString(value, "type") == expectedType)
         val operationId = canonicalOperationId(strictString(value, "operation_id"))
         val envelope = decodeEnvelope(value, field)
-        val parsed = ProtocolV2.parseSignedEnvelope(envelope)
-        require(ProtocolV2.validatePayload(parsed.payload) == messageType)
-        require(parsed.payload["operation_id"].asString == operationId)
         return operationId to envelope
     }
 
@@ -225,7 +254,7 @@ class QrTcpClient(
     private val exchangeService: ClientPaymentExchangeService
 ) {
     suspend fun deliver(descriptor: QrPaymentDescriptor, receiptEnvelope: ByteArray): ByteArray {
-        val receipt = ProtocolV2.parseSignedEnvelope(receiptEnvelope)
+        val receipt = ProtocolV3.parseSignedEnvelope(receiptEnvelope)
         require(receipt.payload["operation_id"].asString == descriptor.operationId)
         return withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) { Socket().use { socket ->
             socket.connect(
@@ -235,6 +264,11 @@ class QrTcpClient(
             socket.soTimeout = QrTcpProtocol.SOCKET_TIMEOUT_MILLIS
             socket.tcpNoDelay = true
             exchangeStore.markDeliveryStarted(descriptor.operationId)
+            val authorization = requireNotNull(exchangeStore.getAuthorization(descriptor.operationId))
+            QrTcpProtocol.writeLine(
+                socket.getOutputStream(),
+                QrTcpProtocol.encodeAuthorization(descriptor.operationId, authorization)
+            )
             QrTcpProtocol.writeLine(
                 socket.getOutputStream(),
                 QrTcpProtocol.encodeReceipt(descriptor.operationId, receiptEnvelope)
@@ -270,11 +304,14 @@ class QrTcpServer(
                         withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) {
                             client.soTimeout = QrTcpProtocol.SOCKET_TIMEOUT_MILLIS
                             client.tcpNoDelay = true
+                            val (authorizationOperationId, authorization) = QrTcpProtocol.decodeAuthorization(
+                                QrTcpProtocol.readLine(client.getInputStream())
+                            )
                             val (receivedOperationId, receipt) = QrTcpProtocol.decodeReceipt(
                                 QrTcpProtocol.readLine(client.getInputStream())
                             )
-                            require(receivedOperationId == operationId)
-                            val ack = coordinator.acceptReceipt(operationId, receipt)
+                            require(authorizationOperationId == operationId && receivedOperationId == operationId)
+                            val ack = coordinator.acceptReceipt(operationId, authorization, receipt)
                             QrTcpProtocol.writeLine(
                                 client.getOutputStream(),
                                 QrTcpProtocol.encodeAck(operationId, ack)

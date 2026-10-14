@@ -13,11 +13,13 @@ sealed interface MobileNfcExchangeResult {
 
 class MobileNfcReader(
     private val transceiver: ApduTransceiver,
-    private val acceptReceipt: suspend (operationId: String, receipt: ByteArray) -> ByteArray
+    private val acceptReceipt: suspend (
+        operationId: String, authorization: ByteArray, receipt: ByteArray
+    ) -> ByteArray
 ) {
     suspend fun exchange(operationId: String, requestEnvelope: ByteArray): MobileNfcExchangeResult {
         requireCanonicalOperationId(operationId)
-        val request = ProtocolV2.parseSignedEnvelope(requestEnvelope)
+        val request = ProtocolV3.parseSignedEnvelope(requestEnvelope)
         require(request.payload["operation_id"].asString == operationId) { "Solicitud de otra operacion" }
 
         val capabilities = requireSuccess(transceiver.transceive(ProtocolV2.SELECT_APDU))
@@ -32,9 +34,11 @@ class MobileNfcReader(
         }
         require(state in RECEIPT_STATES) { "Estado NFC no conciliable: $state" }
 
-        val receipt = readReceipt(operationId)
+        val authorization = readEnvelope(ProtocolV3.INS_GET_AUTHORIZATION, operationId)
             ?: return MobileNfcExchangeResult.WaitingForConfirmation(operationId)
-        val ack = acceptReceipt(operationId, receipt)
+        val receipt = readEnvelope(ProtocolV2.INS_GET_RECEIPT, operationId)
+            ?: return MobileNfcExchangeResult.WaitingForConfirmation(operationId)
+        val ack = acceptReceipt(operationId, authorization, receipt)
         val ackState = parseStatus(sendMessage(ProtocolV2.INS_PUT_ACK, ack), operationId)
         require(ackState == ExchangeState.LOCALLY_ACCEPTED || ackState == ExchangeState.SYNCED) {
             "El telefono cliente no confirmo el acuse"
@@ -52,11 +56,11 @@ class MobileNfcReader(
         return parseStatus(requireSuccess(transceiver.transceive(command)), operationId)
     }
 
-    private suspend fun readReceipt(operationId: String): ByteArray? {
+    private suspend fun readEnvelope(instruction: Int, operationId: String): ByteArray? {
         val chunks = mutableListOf<ByteArray>()
         for (sequence in 0..255) {
             val command = ProtocolV2.buildApdu(
-                ProtocolV2.INS_GET_RECEIPT,
+                instruction,
                 sequence,
                 isLast = true,
                 data = operationId.toByteArray(Charsets.US_ASCII)

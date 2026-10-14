@@ -1,12 +1,16 @@
 package com.example.prototipopagosoffline.sync
 
 import androidx.room.withTransaction
+import com.example.prototipopagosoffline.BuildConfig
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.database.MobilePosOperation
 import com.example.prototipopagosoffline.network.ApiService
-import com.example.prototipopagosoffline.network.OfflinePaymentEvidence
 import com.example.prototipopagosoffline.network.OfflinePaymentResultV2
-import com.example.prototipopagosoffline.network.OfflinePaymentSyncV2Request
+import com.example.prototipopagosoffline.network.OfflinePaymentEvidenceV3
+import com.example.prototipopagosoffline.network.OfflinePaymentResultV3
+import com.example.prototipopagosoffline.network.OfflinePaymentSyncV3Request
+import com.example.prototipopagosoffline.protocol.MessageTypeV3
+import com.example.prototipopagosoffline.protocol.ProtocolV3
 import java.time.Instant
 import java.util.Base64
 
@@ -22,14 +26,18 @@ class MobilePosSyncRepository(
         val candidates = dao.getSyncCandidates(terminalId, instant, limit)
         if (candidates.isEmpty()) return SyncRun(0, dao.getNextSyncAt(terminalId))
         val response = runCatching {
-            api.syncOfflinePaymentsV2(OfflinePaymentSyncV2Request(candidates.map(::evidence)))
+            api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(candidates.map(::evidence)))
         }.getOrNull()
         if (response == null || !response.isSuccessful || response.body() == null) {
             candidates.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
             return SyncRun(0, dao.getNextSyncAt(terminalId))
         }
         val candidateIds = candidates.mapTo(mutableSetOf()) { it.operationId }
-        val grouped = response.body()!!.results.groupBy { it.operation_id }
+        val normalized = response.body()!!.results.map { result ->
+            val operation = candidates.singleOrNull { it.operationId == result.operation_id }
+            normalize(result, operation)
+        }
+        val grouped = normalized.groupBy { it.operation_id }
         var processed = 0
         candidates.forEach { operation ->
             val result = selectUniqueResult(operation.operationId, candidateIds, grouped[operation.operationId])
@@ -47,12 +55,7 @@ class MobilePosSyncRepository(
         initial: OfflinePaymentResultV2,
         instant: Long
     ): Boolean {
-        val result = if (initial.status == "PENDING_EVIDENCE") {
-            val statusResponse = runCatching { api.getOfflinePaymentStatus(operation.operationId) }.getOrNull()
-            if (statusResponse?.isSuccessful == true) {
-                validatedStatusResult(operation.operationId, statusResponse.body()) ?: initial
-            } else initial
-        } else initial
+        val result = initial
         return when (result.status) {
             "ACCEPTED" -> finish(operation.operationId, "SYNCED", result.code)
             "REJECTED" -> finish(operation.operationId, "REJECTED", result.code)
@@ -80,10 +83,49 @@ class MobilePosSyncRepository(
         database.mobilePosOperationDao().scheduleRetry(operation.operationId, instant + delay, code)
     }
 
-    private fun evidence(operation: MobilePosOperation): OfflinePaymentEvidence = OfflinePaymentEvidence(
+    private fun evidence(operation: MobilePosOperation): OfflinePaymentEvidenceV3 = OfflinePaymentEvidenceV3(
         operation_id = operation.operationId,
         request_envelope_b64 = Base64.getEncoder().encodeToString(operation.requestEnvelope),
+        authorization_envelope_b64 = Base64.getEncoder().encodeToString(requireNotNull(operation.authorizationEnvelope)),
         receipt_envelope_b64 = Base64.getEncoder().encodeToString(requireNotNull(operation.receiptEnvelope)),
         ack_envelope_b64 = Base64.getEncoder().encodeToString(requireNotNull(operation.ackEnvelope))
     )
+
+    private fun normalize(result: OfflinePaymentResultV3, operation: MobilePosOperation?): OfflinePaymentResultV2 {
+        val finalValid = if (result.final && result.operation_status in setOf("ACCEPTED", "REJECTED")) {
+            operation != null && verifyResolution(result, operation)
+        } else true
+        val status = when {
+            result.submission_status in setOf("CONFLICT", "INVALID_EVIDENCE") -> "CONFLICT"
+            result.submission_status == "RETRYABLE_ERROR" -> "RETRYABLE_ERROR"
+            result.final && !finalValid -> "RETRYABLE_ERROR"
+            result.final && result.operation_status in setOf("ACCEPTED", "REJECTED") -> result.operation_status
+            result.operation_status == "PENDING_REVIEW" -> "CONFLICT"
+            else -> "PENDING_EVIDENCE"
+        }
+        return OfflinePaymentResultV2(
+            result.operation_id, status,
+            if (result.final && !finalValid) "INVALID_SIGNED_RESOLUTION" else result.code
+        )
+    }
+
+    private fun verifyResolution(result: OfflinePaymentResultV3, operation: MobilePosOperation): Boolean = runCatching {
+        val resolution = ProtocolV3.parseSignedEnvelope(
+            Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+        )
+        require(ProtocolV3.validatePayload(resolution.payload) == MessageTypeV3.PAYMENT_RESOLUTION)
+        require(resolution.verify(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        require(resolution.payload["issuer_key_id"].asString == BuildConfig.ISSUER_KEY_ID)
+        require(resolution.payload["issuer_key_fingerprint"].asString ==
+            ProtocolV3.publicKeyFingerprint(BuildConfig.ISSUER_PUBLIC_KEY_B64))
+        val request = ProtocolV3.parseSignedEnvelope(operation.requestEnvelope)
+        val grant = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.authorizationEnvelope))
+        val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.receiptEnvelope))
+        require(resolution.payload["operation_id"].asString == operation.operationId)
+        require(resolution.payload["request_digest"].asString == ProtocolV3.payloadDigest(request))
+        require(resolution.payload["authorization_digest"].asString == ProtocolV3.payloadDigest(grant))
+        require(resolution.payload["receipt_digest"].asString == ProtocolV3.payloadDigest(receipt))
+        require(resolution.payload["operation_status"].asString == result.operation_status)
+        true
+    }.getOrDefault(false)
 }

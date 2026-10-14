@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                 .build().also { instance = it }
             }
         }
@@ -135,6 +135,12 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE trusted_public_keys ADD COLUMN scope_id TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_trusted_public_keys_owner_type_scope_id ON trusted_public_keys(owner_type, scope_id)")
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE mobile_pos_operations ADD COLUMN authorization_envelope BLOB")
             }
         }
     }

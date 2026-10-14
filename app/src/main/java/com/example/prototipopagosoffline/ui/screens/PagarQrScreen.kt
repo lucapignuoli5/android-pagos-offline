@@ -42,6 +42,7 @@ import androidx.fragment.app.FragmentActivity
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.protocol.ClientPaymentExchangeService
 import com.example.prototipopagosoffline.protocol.ProtocolV2
+import com.example.prototipopagosoffline.protocol.ProtocolV3
 import com.example.prototipopagosoffline.protocol.QrPaymentDescriptor
 import com.example.prototipopagosoffline.protocol.QrTcpClient
 import com.example.prototipopagosoffline.protocol.QrTcpProtocol
@@ -92,7 +93,7 @@ fun PagarQrScreen(
             try {
                 val parsed = withContext(Dispatchers.Default) { QrTcpProtocol.decodeDescriptor(contents) }
                 withContext(Dispatchers.IO) { exchangeService.acceptRequest(parsed.requestEnvelope) }
-                val request = ProtocolV2.parseSignedEnvelope(parsed.requestEnvelope).payload
+                val request = ProtocolV3.parseSignedEnvelope(parsed.requestEnvelope).payload
                 descriptor = parsed
                 merchantLabel = request["merchant_id"].asString
                 amountCents = request["amount_cents"].asLong

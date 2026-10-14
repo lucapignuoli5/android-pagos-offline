@@ -15,6 +15,7 @@ import androidx.room.PrimaryKey
 data class MobilePosOperation(
     @PrimaryKey @ColumnInfo(name = "operation_id") val operationId: String,
     @ColumnInfo(name = "request_envelope", typeAffinity = ColumnInfo.BLOB) val requestEnvelope: ByteArray,
+    @ColumnInfo(name = "authorization_envelope", typeAffinity = ColumnInfo.BLOB) val authorizationEnvelope: ByteArray? = null,
     @ColumnInfo(name = "receipt_envelope", typeAffinity = ColumnInfo.BLOB) val receiptEnvelope: ByteArray? = null,
     @ColumnInfo(name = "ack_envelope", typeAffinity = ColumnInfo.BLOB) val ackEnvelope: ByteArray? = null,
     @ColumnInfo(name = "merchant_id") val merchantId: String,

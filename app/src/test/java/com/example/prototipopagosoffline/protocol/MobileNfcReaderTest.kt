@@ -14,7 +14,7 @@ class MobileNfcReaderTest {
     fun `first approach sends request and waits for client confirmation`() = runBlocking {
         var receiptAccepted = false
         val card = FakeCard(ExchangeState.REQUEST_RECEIVED)
-        val result = MobileNfcReader(card) { _, _ ->
+        val result = MobileNfcReader(card) { _, _, _ ->
             receiptAccepted = true
             byteArrayOf(1)
         }.exchange(OPERATION_ID, requestEnvelope)
@@ -31,7 +31,7 @@ class MobileNfcReaderTest {
         val receipt = ByteArray(401) { index -> (index % 251).toByte() }
         val ack = ByteArray(319) { index -> (250 - index % 251).toByte() }
         val card = FakeCard(ExchangeState.RESERVED, receipt)
-        val result = MobileNfcReader(card) { operationId, receivedReceipt ->
+        val result = MobileNfcReader(card) { operationId, _, receivedReceipt ->
             assertEquals(OPERATION_ID, operationId)
             assertArrayEquals(receipt, receivedReceipt)
             ack

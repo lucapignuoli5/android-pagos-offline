@@ -430,3 +430,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** compilación y recorridos de pérdida/reintento quedan para validación agrupada.
 - **Commit:** `fix(sync): [TFG-C5-AN-03] exigir resolucion final firmada`
 - **Impacto académico:** la reserva solo cambia por evidencia final verificable en el flujo v3 programado.
+
+## TFG-C5-AN-04 — Migrar QR/TCP y lector móvil al contrato v3
+
+- **Fecha:** 2026-10-14
+- **Fase:** C5/C6
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Hallazgos:** R09, R20, R23, R25 y R27; los canales móviles secundarios todavía generaban pagos nuevos con v2.
+- **Anterior:** QR/TCP y el lector NFC móvil enviaban solicitud, comprobante y acuse v2; el comercio no recibía ni persistía la autorización firmada separada.
+- **Nuevo:** el comercio móvil genera solicitudes v3; QR/TCP transmite primero la autorización y luego el comprobante dentro del mismo plazo total, y NFC recupera la autorización mediante APDU `0x50` antes del comprobante. El coordinador valida emisor, alcance de billetera, vínculos y firmas, persiste autorización/comprobante/acuse y su cola sincroniza exclusivamente por `/api/v3`, aceptando estados finales solo con resolución firmada.
+- **Decisión:** conservar las interfaces y pantallas existentes, agregando el sobre de autorización como frame/APDU separado y migración Room 14→15.
+- **Archivos:** Room y DAO de operaciones POS móviles, `MobilePosCoordinator.kt`, `QrTcpProtocol.kt`, `MobileNfcReader.kt`, `PagarQrScreen.kt`, `MobilePosSyncRepository.kt` y adaptación de dobles de prueba.
+- **Contratos/datos:** Room 15 agrega `authorization_envelope` a operaciones POS móviles; descriptor y frames secundarios usan versión 3.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** suites, migración, dos teléfonos, red local y NFC físico quedan para validación agrupada.
+- **Commit:** `feat(transports): [TFG-C5-AN-04] migrar canales moviles a v3`
+- **Impacto académico:** los canales secundarios dejan de crear evidencia v2 nueva; v2 queda para recuperación histórica controlada.
