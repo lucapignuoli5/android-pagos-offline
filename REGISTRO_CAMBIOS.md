@@ -371,3 +371,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** schema Room 11 y ejecución de migración quedan para la etapa de validación agrupada.
 - **Commit:** `feat(android-state): [TFG-C3-AN-02] completar recuperación y estados previos`
+## TFG-C5-AN-01 — Activaciones HCE, límites TCP y colas por identidad
+
+- **Fecha:** 2026-10-14
+- **Fase:** C5
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** HCE serializa APDU por activación y descarta respuestas tardías; TCP aplica conexión e inactividad de 5 segundos y plazo total de 15 segundos cerrando recursos por alcance; WorkManager fija rol y billetera/terminal en sus datos y usa una cola única por identidad, evitando que un cambio de sesión redirija trabajo pendiente.
+- **Archivos:** `PaymentHCEService.kt`, `QrTcpProtocol.kt`, `SyncManager.kt`, `SyncWorker.kt`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** intercambio físico entre teléfonos, ACR122U/HCE y cancelación bajo red real quedan pendientes.
+- **Commit:** `fix(transports): [TFG-C5-AN-01] aislar activaciones y colas por identidad`

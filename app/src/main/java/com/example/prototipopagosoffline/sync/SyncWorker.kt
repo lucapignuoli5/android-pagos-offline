@@ -17,14 +17,16 @@ class SyncWorker(
             RetrofitClient.init(applicationContext)
             val tokenManager = TokenManager(applicationContext)
             val database = AppDatabase.getInstance(applicationContext)
-            val run = when (tokenManager.getRole()) {
+            val role = inputData.getString("role") ?: return Result.success()
+            val accountId = inputData.getString("account_id") ?: return Result.success()
+            val currentAccountId = if (role == "cliente") tokenManager.getWalletId() else tokenManager.getTerminalId()
+            if (tokenManager.getRole() != role || currentAccountId != accountId) return Result.success()
+            val run = when (role) {
                 "cliente" -> {
-                    val walletId = tokenManager.getWalletId() ?: return Result.success()
-                    V2SyncRepository(database, RetrofitClient.apiService).syncDue(walletId)
+                    V2SyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
                 }
                 "comercio" -> {
-                    val terminalId = tokenManager.getTerminalId() ?: return Result.success()
-                    MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(terminalId)
+                    MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
                 }
                 else -> return Result.success()
             }

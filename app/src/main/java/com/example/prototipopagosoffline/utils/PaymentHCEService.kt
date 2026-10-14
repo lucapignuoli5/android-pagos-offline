@@ -13,9 +13,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 class PaymentHCEService : HostApduService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val apduMutex = Mutex()
+    private val activationGeneration = AtomicLong(0)
     private val engine: NfcProtocolEngine by lazy {
         val database = AppDatabase.getInstance(applicationContext)
         NfcProtocolEngine(RoomNfcExchangeStore(database), RoomTrustedPublicKeyResolver(database))
@@ -23,9 +28,14 @@ class PaymentHCEService : HostApduService() {
 
     override fun processCommandApdu(commandApdu: ByteArray?, extras: Bundle?): ByteArray? {
         val command = commandApdu?.copyOf() ?: return ProtocolV2.SW_BAD_DATA
+        val generation = activationGeneration.get()
         serviceScope.launch {
-            val response = engine.process(command)
-            sendResponseApdu(response)
+            val response = apduMutex.withLock {
+                val response = engine.process(command)
+                if (generation != activationGeneration.get()) return@withLock null
+                sendResponseApdu(response)
+                response
+            } ?: return@launch
             val completedAck = command.size >= 5 &&
                 (command[1].toInt() and 0xff) == ProtocolV2.INS_PUT_ACK &&
                 (command[3].toInt() and 0xff) == ProtocolV2.P2_LAST &&
@@ -37,7 +47,10 @@ class PaymentHCEService : HostApduService() {
     }
 
     override fun onDeactivated(reason: Int) {
-        engine.resetActivation()
+        activationGeneration.incrementAndGet()
+        serviceScope.launch {
+            apduMutex.withLock { engine.resetActivation() }
+        }
     }
 
     override fun onDestroy() {

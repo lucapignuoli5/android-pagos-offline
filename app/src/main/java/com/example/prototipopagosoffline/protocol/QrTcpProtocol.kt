@@ -18,6 +18,7 @@ import java.util.UUID
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeout
 import com.example.prototipopagosoffline.utils.MobilePosCoordinator
 
 data class QrPaymentDescriptor(
@@ -30,6 +31,7 @@ data class QrPaymentDescriptor(
 object QrTcpProtocol {
     const val CONNECT_TIMEOUT_MILLIS = 5_000
     const val SOCKET_TIMEOUT_MILLIS = 5_000
+    const val TOTAL_DEADLINE_MILLIS = 15_000L
     const val MAX_TCP_LINE_BYTES = 8 * 1024
     const val MAX_QR_BYTES = 3_000
 
@@ -225,7 +227,7 @@ class QrTcpClient(
     suspend fun deliver(descriptor: QrPaymentDescriptor, receiptEnvelope: ByteArray): ByteArray {
         val receipt = ProtocolV2.parseSignedEnvelope(receiptEnvelope)
         require(receipt.payload["operation_id"].asString == descriptor.operationId)
-        Socket().use { socket ->
+        return withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) { Socket().use { socket ->
             socket.connect(
                 InetSocketAddress(descriptor.host, descriptor.port),
                 QrTcpProtocol.CONNECT_TIMEOUT_MILLIS
@@ -242,8 +244,8 @@ class QrTcpClient(
             )
             require(operationId == descriptor.operationId)
             exchangeService.acceptAck(ack)
-            return ack
-        }
+            ack
+        } }
     }
 }
 
@@ -265,18 +267,20 @@ class QrTcpServer(
                 }
                 socket.use { client ->
                     try {
-                        client.soTimeout = QrTcpProtocol.SOCKET_TIMEOUT_MILLIS
-                        client.tcpNoDelay = true
-                        val (receivedOperationId, receipt) = QrTcpProtocol.decodeReceipt(
-                            QrTcpProtocol.readLine(client.getInputStream())
-                        )
-                        require(receivedOperationId == operationId)
-                        val ack = coordinator.acceptReceipt(operationId, receipt)
-                        QrTcpProtocol.writeLine(
-                            client.getOutputStream(),
-                            QrTcpProtocol.encodeAck(operationId, ack)
-                        )
-                        onAccepted(operationId)
+                        withTimeout(QrTcpProtocol.TOTAL_DEADLINE_MILLIS) {
+                            client.soTimeout = QrTcpProtocol.SOCKET_TIMEOUT_MILLIS
+                            client.tcpNoDelay = true
+                            val (receivedOperationId, receipt) = QrTcpProtocol.decodeReceipt(
+                                QrTcpProtocol.readLine(client.getInputStream())
+                            )
+                            require(receivedOperationId == operationId)
+                            val ack = coordinator.acceptReceipt(operationId, receipt)
+                            QrTcpProtocol.writeLine(
+                                client.getOutputStream(),
+                                QrTcpProtocol.encodeAck(operationId, ack)
+                            )
+                            onAccepted(operationId)
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
