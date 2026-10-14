@@ -11,7 +11,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - `ui/screens/CobroQrScreen.kt` y `ui/screens/PagarQrScreen.kt` implementan QR y sockets TCP locales.
 - `network/` define DTO y acceso HTTP; `database/` contiene Room, entidades y DAO; `sync/` programa y ejecuta sincronización.
 - No hay una separación MVVM demostrada: mantener el diseño observado sin inventar ViewModels, Hilt ni capas adicionales.
-- El QR v2 intercambia una solicitud firmada y parámetros de conexión TCP; no asumir que conecta automáticamente a Wi-Fi Direct o hotspot.
+- QR/TCP v3 intercambia solicitud, autorización, comprobante y acuse firmados; no asumir que conecta automáticamente a Wi-Fi Direct o hotspot.
 - Leer las decisiones vigentes de la raíz: Android aportará la billetera HCE al POS de PC con ACR122U elegido; conservar los flujos móviles existentes salvo cambios solicitados.
 - Al integrar el POS, contrastar HCE con el consumidor PC/SC: AID, APDU, tamaños, segmentación, campos y bytes firmados requieren compatibilidad comprobada.
 - La billetera debe persistir la reserva y el comprobante y poder sincronizar aunque la PC siga offline; no exigir conectividad simultánea de ambos equipos.
@@ -63,4 +63,4 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 
 ## Plan correctivo vigente
 
-La auditoría R01–R34 invalida el cierre integral previo. El contrato v3 está implementado como biblioteca y las fases correctivas C2–C6 incorporaron cambios funcionales; su ejecución integral permanece pendiente. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar compilación, migración, dispositivo o hardware como comprobados mientras no se ejecuten.
+La auditoría R01–R34 invalida el cierre integral previo. La programación C3 llegó a Room 15, confianza por alcance, historial por cuenta, reservas preservadas y resoluciones finales firmadas. HCE, QR/TCP y lector NFC móvil producen v3; v2 queda para recuperación histórica. Su compilación y ejecución integral permanecen pendientes. Preservar datos v2 y registrar cada cambio. Por decisión del equipo, las unidades pueden avanzar como `IMPLEMENTADA / VALIDACIÓN PENDIENTE` sin pruebas al cierre; no declarar compilación, migración, dispositivo o hardware como comprobados mientras no se ejecuten.

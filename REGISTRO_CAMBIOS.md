@@ -446,3 +446,15 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** suites, migración, dos teléfonos, red local y NFC físico quedan para validación agrupada.
 - **Commit:** `feat(transports): [TFG-C5-AN-04] migrar canales moviles a v3`
 - **Impacto académico:** los canales secundarios dejan de crear evidencia v2 nueva; v2 queda para recuperación histórica controlada.
+
+## TFG-C7-DOC-02 — Cerrar programación Android sin atribuir ejecución
+
+- **Fecha:** 2026-10-14
+- **Fase:** C7
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Cambio:** se actualizan instrucciones y registros para reflejar Room 15, confianza por alcance, resoluciones firmadas y transportes v3, conservando por separado toda evidencia anterior.
+- **Archivos:** `AGENTS.md`, registros consolidados y `REGISTRO_CAMBIOS.md`.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** no se afirma compilación, migración, ejecución en teléfonos ni interoperabilidad física.
+- **Commit:** `docs(corrections): [TFG-C7-DOC-02] cerrar programacion android pendiente`
+- **Impacto académico:** ofrece una fuente vigente sin modificar la Entrega 4 presentada.
