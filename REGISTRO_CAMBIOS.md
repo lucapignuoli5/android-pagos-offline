@@ -251,3 +251,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** las pantallas y transportes se conectan en las unidades siguientes.
 - **Commit:** `feat(protocol): [TFG-F6-AN-02] compartir validacion de pagos locales`
 - **Impacto académico:** atribuye la seguridad al contrato y a la persistencia, no al canal NFC o TCP.
+
+## TFG-F6-AN-03 — Sustituir QR/TCP heredado por protocolo v2
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos móviles secundarios e integraciones
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** el servidor aceptaba JSON incompleto con valores inventados, cambiaba el signo del importe, leía líneas sin límite, no esperaba acuse y mostraba éxito antes de persistir.
+- **Comportamiento anterior:** QR solo anunciaba IP/puerto y TCP enviaba una transacción heredada con clave pública autocontenida.
+- **Comportamiento nuevo:** el QR contiene una solicitud v2 firmada y parámetros TCP estrictos; el cliente valida comercio, terminal, importe y firma antes de confirmar, reserva y persiste antes de transmitir, y solo informa éxito después de verificar y guardar el acuse. El comercio valida y persiste el comprobante, genera el acuse y usa una cola durable independiente para conciliación.
+- **Decisión:** usar QR como descubrimiento y transporte de la solicitud v2 firmada; usar TCP acotado para comprobante y acuse exactos, con la misma persistencia/validación que HCE.
+- **Archivos:** `protocol/QrTcpProtocol.kt`, `protocol/QrTcpProtocolTest.kt`, `ui/screens/CobroQrScreen.kt`, `ui/screens/PagarQrScreen.kt`, `database/MobilePosOperationDao.kt`, `sync/MobilePosSyncRepository.kt`, `sync/SyncWorker.kt`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** descriptor QR v2 canónico, tramas TCP `payment_receipt`/`payment_ack`, límite de 3.000 bytes para QR, línea TCP de 8 KiB, tiempos de espera de 5 segundos y conciliación por rol sobre colas Room separadas.
+- **Pruebas:** 22 pruebas JVM correctas, incluidas validación exacta de centavos, campos y tipos obligatorios, límites y terminación de línea, y recorrido completo del descriptor firmado; APK debug, compilación de pruebas instrumentadas y lint correctos.
+- **Limitaciones:** requiere dos dispositivos y red local para evidencia de ejecución real.
+- **Commit:** `feat(qr): [TFG-F6-AN-03] transportar pagos v2 por tcp local`
+- **Impacto académico:** conserva QR/TCP como alternativa móvil sin equipararla al flujo principal ACR122U.

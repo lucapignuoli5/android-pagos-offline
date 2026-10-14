@@ -3,7 +3,6 @@ package com.example.prototipopagosoffline.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
@@ -15,17 +14,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,29 +35,28 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import com.example.prototipopagosoffline.PaymentState
 import com.example.prototipopagosoffline.database.AppDatabase
-import com.example.prototipopagosoffline.database.SyncState
-import com.example.prototipopagosoffline.database.TransactionHistory
-import com.example.prototipopagosoffline.utils.ReceiptUtils
-import com.example.prototipopagosoffline.utils.SecurityUtils
-import com.google.gson.Gson
+import com.example.prototipopagosoffline.protocol.ClientPaymentExchangeService
+import com.example.prototipopagosoffline.protocol.ProtocolV2
+import com.example.prototipopagosoffline.protocol.QrPaymentDescriptor
+import com.example.prototipopagosoffline.protocol.QrTcpClient
+import com.example.prototipopagosoffline.protocol.QrTcpProtocol
+import com.example.prototipopagosoffline.protocol.RoomNfcExchangeStore
+import com.example.prototipopagosoffline.protocol.RoomTrustedPublicKeyResolver
+import com.example.prototipopagosoffline.sync.SyncManager
+import com.example.prototipopagosoffline.utils.ConfirmationResult
+import com.example.prototipopagosoffline.utils.OfflinePaymentCoordinator
+import com.example.prototipopagosoffline.utils.TokenManager
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanIntentResult
 import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.PrintWriter
-import java.net.ConnectException
-import java.net.Socket
-import java.util.Locale
 
 @Composable
 fun PagarQrScreen(
@@ -72,202 +66,163 @@ fun PagarQrScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    
-    var showAmountDialog by remember { mutableStateOf(false) }
-    var targetIp by remember { mutableStateOf("") }
-    var targetPort by remember { mutableStateOf(0) }
-    var inputAmount by remember { mutableStateOf("") }
-    
-    var lastTransaction by remember { mutableStateOf<TransactionHistory?>(null) }
+    val database = remember { AppDatabase.getInstance(context) }
+    val store = remember { RoomNfcExchangeStore(database) }
+    val exchangeService = remember {
+        ClientPaymentExchangeService(store, RoomTrustedPublicKeyResolver(database, "pos"))
+    }
+    val coordinator = remember { OfflinePaymentCoordinator(database) }
+    val walletId = remember { TokenManager(context).getWalletId() }
+    var descriptor by remember { mutableStateOf<QrPaymentDescriptor?>(null) }
+    var merchantLabel by remember { mutableStateOf("") }
+    var amountCents by remember { mutableStateOf(0L) }
+    var showConfirmation by remember { mutableStateOf(false) }
+    var completedOperation by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
 
-    // Use a custom contract to avoid the "lower 16 bits for requestCode" issue
     val scanLauncher = rememberLauncherForActivityResult<ScanOptions, ScanIntentResult>(
         object : ActivityResultContract<ScanOptions, ScanIntentResult>() {
-            override fun createIntent(context: Context, input: ScanOptions): Intent {
-                return input.createScanIntent(context)
-            }
-            override fun parseResult(resultCode: Int, intent: Intent?): ScanIntentResult {
-                return ScanContract().parseResult(resultCode, intent)
-            }
+            override fun createIntent(context: Context, input: ScanOptions): Intent = input.createScanIntent(context)
+            override fun parseResult(resultCode: Int, intent: Intent?): ScanIntentResult =
+                ScanContract().parseResult(resultCode, intent)
         }
     ) { result ->
-        if (result.contents != null) {
+        val contents = result.contents ?: return@rememberLauncherForActivityResult
+        scope.launch {
             try {
-                val json = JSONObject(result.contents)
-                targetIp = json.getString("ip")
-                targetPort = json.getInt("port")
-                showAmountDialog = true
-            } catch (e: Exception) {
-                Toast.makeText(context, "QR no válido para pago", Toast.LENGTH_SHORT).show()
-                Log.e("TCP_CLIENT", "Error al parsear QR", e)
+                val parsed = withContext(Dispatchers.Default) { QrTcpProtocol.decodeDescriptor(contents) }
+                withContext(Dispatchers.IO) { exchangeService.acceptRequest(parsed.requestEnvelope) }
+                val request = ProtocolV2.parseSignedEnvelope(parsed.requestEnvelope).payload
+                descriptor = parsed
+                merchantLabel = request["merchant_id"].asString
+                amountCents = request["amount_cents"].asLong
+                showConfirmation = true
+                message = null
+            } catch (_: Exception) {
+                Toast.makeText(context, "QR de pago inválido o no confiable", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    if (showAmountDialog) {
+    if (showConfirmation) {
         AlertDialog(
-            onDismissRequest = { showAmountDialog = false },
-            title = { Text("Confirmar Pago") },
-            text = {
-                Column {
-                    Text("Ingresar monto a pagar al comercio:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = inputAmount,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) inputAmount = it },
-                        label = { Text("Monto") },
-                        prefix = { Text("$") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
+            onDismissRequest = { showConfirmation = false },
+            title = { Text("Confirmar pago") },
+            text = { Text("Comercio: $merchantLabel\nImporte: $${formatCents(amountCents)}") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val amountDoble = inputAmount.toDoubleOrNull() ?: 0.0
-                        val amountCents = (amountDoble * 100).toLong()
-                        if (amountCents > 0L) {
-                            if (amountDoble <= PaymentState.userBalance) {
-                                authenticateAndPay(
-                                    context = context,
-                                    onAuthenticated = {
-                                        showAmountDialog = false
-                                        sendPayment(targetIp, targetPort, amountCents, context, scope, 
-                                            onSuccess = { tx ->
-                                                lastTransaction = tx
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                playSuccessSound(context)
-                                            },
-                                            onBack = onBack
-                                        )
-                                    },
-                                    onFailure = {
-                                        Toast.makeText(context, "Pago cancelado o fallido", Toast.LENGTH_SHORT).show()
+                TextButton(onClick = {
+                    val current = descriptor ?: return@TextButton
+                    authenticateAndPay(
+                        context,
+                        onAuthenticated = {
+                            showConfirmation = false
+                            scope.launch {
+                                var reserved = false
+                                try {
+                                    val currentWallet = walletId ?: error("Billetera no configurada")
+                                    val confirmation = withContext(Dispatchers.IO) {
+                                        coordinator.confirm(current.operationId, currentWallet)
                                     }
-                                )
-                            } else {
-                                Toast.makeText(context, "❌ Saldo insuficiente", Toast.LENGTH_SHORT).show()
+                                    reserved = true
+                                    val receipt = when (confirmation) {
+                                        is ConfirmationResult.Created -> confirmation.receiptEnvelope
+                                        is ConfirmationResult.AlreadyCreated -> confirmation.receiptEnvelope
+                                    }
+                                    withContext(Dispatchers.IO) {
+                                        QrTcpClient(store, exchangeService).deliver(current, receipt)
+                                    }
+                                    SyncManager.enqueueSync(context)
+                                    completedOperation = current.operationId
+                                    message = "Acuse verificado y persistido. Conciliación pendiente."
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    playSuccessSound(context)
+                                } catch (_: Exception) {
+                                    if (reserved) SyncManager.enqueueSync(context)
+                                    message = if (reserved) {
+                                        "Entrega incierta: el importe sigue reservado hasta resolver la operación."
+                                    } else {
+                                        "No se pudo reservar el pago."
+                                    }
+                                }
                             }
-                        } else {
-                            Toast.makeText(context, "Ingrese un monto válido", Toast.LENGTH_SHORT).show()
+                        },
+                        onFailure = {
+                            Toast.makeText(context, "Pago cancelado", Toast.LENGTH_SHORT).show()
                         }
-                    }
-                ) {
-                    Text("Confirmar Pago")
-                }
+                    )
+                }) { Text("Confirmar") }
             },
             dismissButton = {
-                TextButton(onClick = { showAmountDialog = false }) {
-                    Text("Cancelar")
-                }
+                TextButton(onClick = { showConfirmation = false }) { Text("Cancelar") }
             }
         )
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier.align(Alignment.Start)
-        ) {
+        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.Start)) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
         }
-
-        Text(
-            text = "Pagar con QR",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-
+        Text("Pagar con QR", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(32.dp))
-
-        if (lastTransaction != null) {
-            Text(
-                text = "✅ ¡Pago Exitoso!",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
+        completedOperation?.let {
+            Text("Pago aceptado localmente", style = MaterialTheme.typography.headlineSmall)
+            Text("Monto: $${formatCents(amountCents)}")
+            Text("Operación: $it", style = MaterialTheme.typography.bodySmall)
+        } ?: Text(
+            message ?: "Escaneá la solicitud QR firmada del comercio.",
+            style = MaterialTheme.typography.bodyLarge
+        )
+        message?.takeIf { completedOperation != null }?.let {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Monto: $${String.format(java.util.Locale.US, "%.2f", Math.abs(lastTransaction!!.monto) / 100.0)}",
-                style = MaterialTheme.typography.bodyLarge
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            Button(
-                onClick = { ReceiptUtils.shareReceipt(context, lastTransaction!!) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-            ) {
-                Icon(Icons.Default.Share, contentDescription = null)
-                Spacer(Modifier.padding(4.dp))
-                Text("Compartir Comprobante")
-            }
-        } else {
-            Text(
-                text = "Escanea el código QR del comercio para iniciar el pago.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-
-            Spacer(modifier = Modifier.height(64.dp))
-
+            Text(it, style = MaterialTheme.typography.bodyMedium)
+        }
+        Spacer(modifier = Modifier.height(48.dp))
+        if (completedOperation == null) {
             Button(
                 onClick = {
                     val options = ScanOptions()
-                    options.setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                    options.setPrompt("Apunta la cámara al código QR")
-                    options.setCameraId(0)
-                    options.setBeepEnabled(false)
-                    options.setBarcodeImageEnabled(true)
-                    options.setCaptureActivity(com.example.prototipopagosoffline.ui.screens.CustomScannerActivity::class.java)
-                    options.setOrientationLocked(true)
+                        .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        .setPrompt("Apuntá la cámara al código QR")
+                        .setBeepEnabled(false)
+                        .setBarcodeImageEnabled(false)
+                        .setCaptureActivity(CustomScannerActivity::class.java)
+                        .setOrientationLocked(true)
                     scanLauncher.launch(options)
                 },
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Text("Escanear QR del Comercio", fontSize = 18.sp)
-            }
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) { Text("Escanear solicitud", fontSize = 18.sp) }
         }
-
         Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Volver al Menú")
-        }
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Volver al menú") }
     }
 }
 
-private fun playSuccessSound(context: android.content.Context) {
-    try {
+private fun formatCents(amount: Long): String = String.format(
+    java.util.Locale.US,
+    "%.2f",
+    amount / 100.0
+)
+
+private fun playSuccessSound(context: Context) {
+    runCatching {
         val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        val r = RingtoneManager.getRingtone(context, notification)
-        r.play()
-    } catch (e: Exception) {
-        e.printStackTrace()
+        RingtoneManager.getRingtone(context, notification).play()
     }
 }
 
 private fun authenticateAndPay(
-    context: android.content.Context,
+    context: Context,
     onAuthenticated: () -> Unit,
     onFailure: () -> Unit
 ) {
-    val activity = context as? FragmentActivity ?: return
+    val activity = context as? FragmentActivity ?: return onFailure()
     val executor = ContextCompat.getMainExecutor(context)
-    val biometricPrompt = BiometricPrompt(activity, executor,
+    val biometricPrompt = BiometricPrompt(
+        activity,
+        executor,
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
@@ -278,108 +233,15 @@ private fun authenticateAndPay(
                 super.onAuthenticationError(errorCode, errString)
                 onFailure()
             }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-            }
-        })
-
+        }
+    )
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle("Autorizar pago offline")
-        .setSubtitle("Confirme su identidad para proceder con el pago")
-        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+        .setSubtitle("Confirmá tu identidad para reservar el importe")
+        .setAllowedAuthenticators(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
         .build()
-
     biometricPrompt.authenticate(promptInfo)
-}
-
-private fun sendPayment(
-    ip: String, 
-    port: Int, 
-    amount: Long,
-    context: android.content.Context, 
-    scope: kotlinx.coroutines.CoroutineScope,
-    onSuccess: (TransactionHistory) -> Unit,
-    onBack: () -> Unit
-) {
-    scope.launch {
-        withContext(Dispatchers.IO) {
-            try {
-                Log.d("TCP_CLIENT", "Intentando conectar a $ip:$port...")
-                val socket = Socket(ip, port)
-                val out = PrintWriter(socket.getOutputStream(), true)
-                
-                val txId = "TX-QR-${System.currentTimeMillis()}"
-                val timestamp = (System.currentTimeMillis() / 1000).toString()
-                val tokenId = "TOKEN-USER-QR"
-                val publicKey = SecurityUtils.getPublicKey()
-                
-                // Asegurar monto absoluto y formato decimal estricto para la firma
-                val absoluteAmount = Math.abs(amount)
-                val amountFormatted = String.format(Locale.US, "%.1f", absoluteAmount.toDouble())
-                
-                // Nuevo formato estricto con separadores pipe (|)
-                val payloadToSign = "${txId}|${amountFormatted}|${timestamp}"
-                
-                Log.d("FirmaDebug", "Firmando: $payloadToSign")
-                val signatureBase64 = SecurityUtils.signPayload(payloadToSign)
-                
-                val paymentData = mapOf(
-                    "id_transaccion" to txId,
-                    "monto" to absoluteAmount,
-                    "timestamp" to timestamp,
-                    "token_id" to tokenId,
-                    "firma" to signatureBase64,
-                    "payload_original" to payloadToSign,
-                    "clave_publica" to publicKey
-                )
-                
-                val json = Gson().toJson(paymentData)
-                out.println(json)
-                out.flush()
-                
-                Log.d("TCP_CLIENT", "Pago enviado exitosamente: $json")
-                
-                val transaction = TransactionHistory(
-                    idTransaccion = txId,
-                    monto = absoluteAmount,
-                    timestamp = timestamp,
-                    comercioId = 1,
-                    tokenId = tokenId,
-                    firma = signatureBase64,
-                    payloadOriginal = payloadToSign,
-                    clavePublica = publicKey,
-                    isOutgoing = true,
-                    estadoSincronizacion = SyncState.PENDING
-                )
-
-                withContext(Dispatchers.Main) {
-                    PaymentState.addTransaction(transaction)
-                    Toast.makeText(context, "✅ Pago enviado de $$absoluteAmount", Toast.LENGTH_LONG).show()
-                    onSuccess(transaction)
-                }
-                
-                val db = AppDatabase.getInstance(context)
-                db.transactionDao().insertTransaction(transaction)
-                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
-                
-                socket.close()
-            } catch (e: ConnectException) {
-                Log.e("TCP_CLIENT", "No se pudo conectar: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error: Comercio no disponible en la red", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: java.net.NoRouteToHostException) {
-                Log.e("TCP_CLIENT", "Host inalcanzable (NoRouteToHost): ${e.message}")
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "❌ Error: Dispositivo inalcanzable. Verifica que ambos estén en el MISMO Wi-Fi o Hotspot.", Toast.LENGTH_LONG).show()
-                }
-            } catch (e: Exception) {
-                Log.e("TCP_CLIENT", "Error al enviar pago", e)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error de red: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
 }

@@ -21,4 +21,16 @@ interface MobilePosOperationDao {
         walletId: String,
         authorizationId: String
     ): Int
+
+    @Query("SELECT * FROM mobile_pos_operations WHERE terminal_id = :terminalId AND receipt_envelope IS NOT NULL AND ack_envelope IS NOT NULL AND state = 'LOCALLY_ACCEPTED' AND (next_sync_at_epoch_seconds IS NULL OR next_sync_at_epoch_seconds <= :now) ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
+    suspend fun getSyncCandidates(terminalId: String, now: Long, limit: Int = 100): List<MobilePosOperation>
+
+    @Query("SELECT MIN(COALESCE(next_sync_at_epoch_seconds, 0)) FROM mobile_pos_operations WHERE terminal_id = :terminalId AND receipt_envelope IS NOT NULL AND ack_envelope IS NOT NULL AND state = 'LOCALLY_ACCEPTED'")
+    suspend fun getNextSyncAt(terminalId: String): Long?
+
+    @Query("UPDATE mobile_pos_operations SET sync_attempts = sync_attempts + 1, next_sync_at_epoch_seconds = :nextAttempt, last_sync_code = :code WHERE operation_id = :operationId AND state = 'LOCALLY_ACCEPTED'")
+    suspend fun scheduleRetry(operationId: String, nextAttempt: Long, code: String): Int
+
+    @Query("UPDATE mobile_pos_operations SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state = 'LOCALLY_ACCEPTED'")
+    suspend fun finishSync(operationId: String, state: String, code: String?): Int
 }

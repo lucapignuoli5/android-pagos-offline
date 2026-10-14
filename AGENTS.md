@@ -11,7 +11,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - `ui/screens/CobroQrScreen.kt` y `ui/screens/PagarQrScreen.kt` implementan QR y sockets TCP locales.
 - `network/` define DTO y acceso HTTP; `database/` contiene Room, entidades y DAO; `sync/` programa y ejecuta sincronización.
 - No hay una separación MVVM demostrada: mantener el diseño observado sin inventar ViewModels, Hilt ni capas adicionales.
-- El QR intercambia parámetros de conexión TCP; no asumir que conecta automáticamente a Wi-Fi Direct o hotspot.
+- El QR v2 intercambia una solicitud firmada y parámetros de conexión TCP; no asumir que conecta automáticamente a Wi-Fi Direct o hotspot.
 - Leer las decisiones vigentes de la raíz: Android aportará la billetera HCE al POS de PC con ACR122U elegido; conservar los flujos móviles existentes salvo cambios solicitados.
 - Al integrar el POS, contrastar HCE con el consumidor PC/SC: AID, APDU, tamaños, segmentación, campos y bytes firmados requieren compatibilidad comprobada.
 - La billetera debe persistir la reserva y el comprobante y poder sincronizar aunque la PC siga offline; no exigir conectividad simultánea de ambos equipos.
@@ -24,6 +24,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - La sesión solo se restaura si conserva token, identificador y billetera local aprovisionada; cerrar sesión no elimina operaciones ni libera reservas.
 - El rol comercio exige credenciales externas, registra una clave POS P-256 y persiste terminal e inventario de claves de billetera antes de habilitar sus pantallas.
 - La conciliación v2 usa una única cola WorkManager durable por billetera autenticada, procesa resultados individuales y conserva reservas ante evidencia pendiente, conflicto o error transitorio.
+- QR/TCP usa el contrato v2 común, mensajes canónicos y acotados, tiempos de espera y cierre de sockets; el cliente solo muestra aceptación después de persistir un acuse válido y el comercio conserva su propia cola durable.
 - La migración 5→10 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
 - El POS de escritorio está implementado en el repositorio backend y el flujo simulado pasa; Android descarga sus claves públicas registradas. La interoperabilidad ACR122U/HCE continúa pendiente de hardware.
 
@@ -48,7 +49,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Pruebas unitarias: `.\gradlew.bat :app:testDebugUnitTest`; análisis Android: `.\gradlew.bat :app:lintDebug`.
 - Pruebas instrumentadas: `.\gradlew.bat :app:connectedDebugAndroidTest`, con dispositivo o emulador compatible.
 - Las verificaciones vigentes usan el JBR 21 de Android Studio y el SDK 36.1 local mediante `JAVA_HOME` y `ANDROID_HOME`; `local.properties` aún señala una ruta SDK inexistente.
-- La suite JVM vigente contiene 18 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
+- La suite JVM vigente contiene 22 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
 
 ## Antes de terminar
 

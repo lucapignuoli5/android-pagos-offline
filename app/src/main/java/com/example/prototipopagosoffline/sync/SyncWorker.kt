@@ -15,12 +15,19 @@ class SyncWorker(
     override suspend fun doWork(): Result {
         return try {
             RetrofitClient.init(applicationContext)
-            val walletId = TokenManager(applicationContext).getWalletId()
-                ?: return Result.success()
-            val run = V2SyncRepository(
-                AppDatabase.getInstance(applicationContext),
-                RetrofitClient.apiService
-            ).syncDue(walletId)
+            val tokenManager = TokenManager(applicationContext)
+            val database = AppDatabase.getInstance(applicationContext)
+            val run = when (tokenManager.getRole()) {
+                "cliente" -> {
+                    val walletId = tokenManager.getWalletId() ?: return Result.success()
+                    V2SyncRepository(database, RetrofitClient.apiService).syncDue(walletId)
+                }
+                "comercio" -> {
+                    val terminalId = tokenManager.getTerminalId() ?: return Result.success()
+                    MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(terminalId)
+                }
+                else -> return Result.success()
+            }
             run.nextSyncAtEpochSeconds?.let { next ->
                 val delay = (next - Instant.now().epochSecond).coerceAtLeast(0)
                 SyncManager.enqueueSync(applicationContext, delay)
