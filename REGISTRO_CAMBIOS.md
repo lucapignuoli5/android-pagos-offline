@@ -267,3 +267,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Limitaciones:** requiere dos dispositivos y red local para evidencia de ejecución real.
 - **Commit:** `feat(qr): [TFG-F6-AN-03] transportar pagos v2 por tcp local`
 - **Impacto académico:** conserva QR/TCP como alternativa móvil sin equipararla al flujo principal ACR122U.
+
+## TFG-F6-AN-04 — Adaptar el lector NFC móvil al protocolo v2
+
+- **Fecha:** 2026-10-14
+- **Fase:** 6 — Flujos móviles secundarios e integraciones
+- **Estado:** PARCIAL
+- **Hallazgo o requisito:** el lector móvil ejecutaba un único `SELECT`, confiaba en una clave autocontenida, reconstruía campos no transmitidos y persistía una operación heredada sin solicitud ni acuse.
+- **Comportamiento anterior:** acercar un teléfono intentaba convertir una respuesta delimitada por barras en un cobro y podía mostrar éxito sin el protocolo de dos acercamientos.
+- **Comportamiento nuevo:** el comercio crea una solicitud v2 firmada con importe fijo; el primer acercamiento selecciona la aplicación HCE, valida capacidades, transmite la solicitud fragmentada y espera la confirmación del cliente. El segundo acercamiento consulta estado, recupera el comprobante por fragmentos, lo valida y persiste mediante el coordinador común, transmite el acuse y recién entonces informa aceptación local.
+- **Decisión:** reutilizar solicitud, comprobante, acuse, validadores y persistencia v2; encapsular APDU en un lector comprobable sin hardware.
+- **Archivos:** `PosScreen.kt`, `protocol/MobileNfcReader.kt`, `protocol/MobileNfcReaderTest.kt`, eliminación de `utils/SecurityUtils.kt`, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- **Contratos o datos afectados:** APDU v2 `SELECT`, `PUT_REQUEST`, `GET_STATUS`, `GET_RECEIPT` y `PUT_ACK`; fragmentos de 160 bytes, máximo lógico de 4 KiB, tiempo de espera ISO-DEP de 5 segundos y la misma cola durable del comercio móvil.
+- **Pruebas:** 24 pruebas JVM correctas, incluidas espera tras el primer acercamiento y recepción/transmisión multiframe en el segundo; APK debug, compilación de pruebas instrumentadas y lint correctos.
+- **Limitaciones:** la interoperabilidad física exige dos dispositivos NFC compatibles y no fue ejecutada en este entorno; este flujo secundario no acredita el ACR122U principal.
+- **Commit:** `feat(nfc): [TFG-F6-AN-04] adaptar lector movil al protocolo v2`
+- **Impacto académico:** conserva el lector móvil como flujo secundario y evita presentarlo como sustituto del POS de Windows.

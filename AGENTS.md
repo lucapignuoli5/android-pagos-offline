@@ -7,7 +7,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Kotlin, Jetpack Compose, Room, Retrofit y WorkManager; consultar versiones en `app/build.gradle.kts` y `gradle/libs.versions.toml`.
 - El paquete principal está en `app/src/main/java/com/example/prototipopagosoffline/`; las rutas de código siguientes son relativas a él.
 - `MainActivity.kt` reúne pantallas y lógica; `PaymentState.kt` comparte estado y `PosScreen.kt` implementa el lector NFC del comercio.
-- `utils/PaymentHCEService.kt` responde mediante HCE; `utils/SecurityUtils.kt` maneja claves y firmas.
+- `utils/PaymentHCEService.kt` responde mediante HCE; `protocol/MobileNfcReader.kt` implementa el lector móvil y `utils/TerminalKeyManager.kt` maneja claves POS.
 - `ui/screens/CobroQrScreen.kt` y `ui/screens/PagarQrScreen.kt` implementan QR y sockets TCP locales.
 - `network/` define DTO y acceso HTTP; `database/` contiene Room, entidades y DAO; `sync/` programa y ejecuta sincronización.
 - No hay una separación MVVM demostrada: mantener el diseño observado sin inventar ViewModels, Hilt ni capas adicionales.
@@ -25,6 +25,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - El rol comercio exige credenciales externas, registra una clave POS P-256 y persiste terminal e inventario de claves de billetera antes de habilitar sus pantallas.
 - La conciliación v2 usa una única cola WorkManager durable por billetera autenticada, procesa resultados individuales y conserva reservas ante evidencia pendiente, conflicto o error transitorio.
 - QR/TCP usa el contrato v2 común, mensajes canónicos y acotados, tiempos de espera y cierre de sockets; el cliente solo muestra aceptación después de persistir un acuse válido y el comercio conserva su propia cola durable.
+- El lector NFC móvil usa el mismo contrato v2 y el protocolo de dos acercamientos; compila y tiene pruebas con un transceptor simulado, pero carece de verificación entre dispositivos físicos.
 - La migración 5→10 y las pruebas instrumentadas compilan, pero no se ejecutaron porque no hay dispositivo/emulador conectado. HCE y Android Keystore tampoco cuentan aún con validación física.
 - El POS de escritorio está implementado en el repositorio backend y el flujo simulado pasa; Android descarga sus claves públicas registradas. La interoperabilidad ACR122U/HCE continúa pendiente de hardware.
 
@@ -49,7 +50,7 @@ Leer `../../AGENTS.md` antes de actuar si el contexto general no está cargado; 
 - Pruebas unitarias: `.\gradlew.bat :app:testDebugUnitTest`; análisis Android: `.\gradlew.bat :app:lintDebug`.
 - Pruebas instrumentadas: `.\gradlew.bat :app:connectedDebugAndroidTest`, con dispositivo o emulador compatible.
 - Las verificaciones vigentes usan el JBR 21 de Android Studio y el SDK 36.1 local mediante `JAVA_HOME` y `ANDROID_HOME`; `local.properties` aún señala una ruta SDK inexistente.
-- La suite JVM vigente contiene 22 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
+- La suite JVM vigente contiene 24 pruebas y las pruebas instrumentadas de migración compilan; su ejecución requiere dispositivo o emulador.
 
 ## Antes de terminar
 
