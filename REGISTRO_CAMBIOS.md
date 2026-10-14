@@ -399,3 +399,19 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - **Pruebas:** no ejecutadas por decisión del usuario.
 - **Limitaciones:** schemas Room 11–13, compilación, ejecución Android, Keystore y hardware quedan pendientes.
 - **Commit:** `feat(v3): [TFG-C5-AN-02] integrar autorizacion y cierre v3`
+
+## TFG-C3-AN-03 — Aislar saldo, confianza e historial por identidad
+
+- **Fecha:** 2026-10-14
+- **Fase:** C3
+- **Estado:** IMPLEMENTADA / VALIDACIÓN PENDIENTE
+- **Hallazgos:** R06, R09, R10, R20 y R21.
+- **Anterior:** el refresco reemplazaba la fila completa de billetera, el inventario local no conservaba el alcance de terminal/billetera, un acuse tardío no podía adjuntarse a un resultado final y la pantalla leía únicamente el historial heredado.
+- **Nuevo:** el saldo confirmado se actualiza sin copiar ni reemplazar reservas; Room 13→14 agrega el alcance de las claves confiables, revoca el inventario anterior antes de aplicar el nuevo y v3 exige que la clave POS corresponda a la terminal firmante. Los acuses tardíos se anexan sin cambiar estados financieros finales y el historial de cliente incorpora operaciones v3 de su billetera, manteniendo separados los registros heredados.
+- **Decisión:** conservar estados y reservas mediante actualizaciones SQL condicionadas y tratar el inventario descargado como snapshot de confianza por propósito y alcance.
+- **Archivos:** `MainActivity.kt`, `database/AppDatabase.kt`, `WalletDao.kt`, `NfcExchange.kt`, `NfcExchangeDao.kt`, `network/SyncItem.kt`, `protocol/ClientPaymentExchangeService.kt`, `NfcProtocolEngine.kt`, `RoomNfcExchangeStore.kt`, `utils/OfflineProvisioner.kt`, `MerchantProvisioner.kt` y adaptación de dobles de prueba a la nueva interfaz.
+- **Contratos/datos:** migración aditiva Room 13→14; `request_id` idempotente al solicitar autorización; respuesta de saldo expone revisión contable.
+- **Pruebas:** no ejecutadas por decisión del usuario.
+- **Limitaciones:** schema Room 14, compilación, migración real, Keystore y dispositivos quedan para validación agrupada.
+- **Commit:** `fix(android-state): [TFG-C3-AN-03] aislar confianza saldo e historial`
+- **Impacto académico:** completa la programación de C3 sin presentar la migración ni el recorrido móvil como comprobados.

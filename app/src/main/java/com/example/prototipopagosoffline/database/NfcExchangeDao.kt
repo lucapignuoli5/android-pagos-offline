@@ -37,7 +37,7 @@ interface NfcExchangeDao {
     @Query("UPDATE nfc_exchanges SET state = 'DELIVERY_UNCERTAIN' WHERE operation_id = :operationId AND state = 'RESERVED'")
     suspend fun markDeliveryStarted(operationId: String): Int
 
-    @Query("UPDATE nfc_exchanges SET ack_envelope = :ack, state = 'LOCALLY_ACCEPTED', next_sync_at_epoch_seconds = NULL, last_sync_code = NULL WHERE operation_id = :operationId AND state IN ('RESERVED', 'DELIVERY_UNCERTAIN')")
+    @Query("UPDATE nfc_exchanges SET ack_envelope = :ack, state = CASE WHEN state IN ('RESERVED','DELIVERY_UNCERTAIN') THEN 'LOCALLY_ACCEPTED' ELSE state END, next_sync_at_epoch_seconds = CASE WHEN state IN ('RESERVED','DELIVERY_UNCERTAIN') THEN NULL ELSE next_sync_at_epoch_seconds END, last_sync_code = CASE WHEN state IN ('RESERVED','DELIVERY_UNCERTAIN') THEN NULL ELSE last_sync_code END WHERE operation_id = :operationId AND ack_envelope IS NULL AND state IN ('RESERVED','DELIVERY_UNCERTAIN','SYNCED','REJECTED','CONFLICT')")
     suspend fun setAck(operationId: String, ack: ByteArray): Int
 
     @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId AND receipt_envelope IS NOT NULL AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED') AND (next_sync_at_epoch_seconds IS NULL OR next_sync_at_epoch_seconds <= :now) ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
@@ -55,13 +55,20 @@ interface NfcExchangeDao {
     @Query("SELECT * FROM nfc_exchanges WHERE authorization_id = :authorizationId AND receipt_envelope IS NOT NULL ORDER BY created_at_epoch_seconds ASC")
     suspend fun getByAuthorization(authorizationId: String): List<NfcExchange>
 
+    @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId ORDER BY created_at_epoch_seconds DESC LIMIT :limit")
+    suspend fun getHistoryForWallet(walletId: String, limit: Int = 100): List<NfcExchange>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrustedKey(key: TrustedPublicKey)
 
-    @Query("SELECT * FROM trusted_public_keys WHERE key_id = :keyId AND fingerprint = :fingerprint AND owner_type = :ownerType AND revoked = 0 LIMIT 1")
+    @Query("UPDATE trusted_public_keys SET revoked = 1 WHERE owner_type = :ownerType")
+    suspend fun revokeInventory(ownerType: String): Int
+
+    @Query("SELECT * FROM trusted_public_keys WHERE key_id = :keyId AND fingerprint = :fingerprint AND owner_type = :ownerType AND revoked = 0 AND (:scopeId IS NULL OR scope_id = :scopeId) LIMIT 1")
     suspend fun getActiveTrustedKey(
         keyId: String,
         fingerprint: String,
-        ownerType: String
+        ownerType: String,
+        scopeId: String? = null
     ): TrustedPublicKey?
 }

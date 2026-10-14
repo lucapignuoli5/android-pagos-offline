@@ -55,6 +55,7 @@ data class TrustedKeyResponse(
 )
 
 data class OfflineAuthorizationRequest(
+    val request_id: String,
     val wallet_id: String,
     val wallet_key_id: String,
     val max_payment_cents: Long,
@@ -120,7 +121,8 @@ data class WalletBalanceResponse(
     val currency: String,
     val confirmed_balance_cents: Long,
     val authorized_offline_cents: Long,
-    val available_for_authorization_cents: Long
+    val available_for_authorization_cents: Long,
+    val review_required: Boolean = false
 )
 
 data class OfflinePaymentEvidence(

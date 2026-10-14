@@ -72,8 +72,8 @@ class RoomTrustedPublicKeyResolver(
         require(ownerType == "pos" || ownerType == "wallet")
     }
 
-    override suspend fun resolve(keyId: String, fingerprint: String): String? =
+    override suspend fun resolve(keyId: String, fingerprint: String, scopeId: String?): String? =
         database.nfcExchangeDao()
-            .getActiveTrustedKey(keyId, fingerprint, ownerType)
+            .getActiveTrustedKey(keyId, fingerprint, ownerType, scopeId)
             ?.publicKeyBase64
 }

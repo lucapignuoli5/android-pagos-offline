@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                 .build().also { instance = it }
             }
         }
@@ -128,6 +128,13 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_envelope BLOB")
                 db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_manifest BLOB")
                 db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_state TEXT NOT NULL DEFAULT 'OPEN'")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trusted_public_keys ADD COLUMN scope_id TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_trusted_public_keys_owner_type_scope_id ON trusted_public_keys(owner_type, scope_id)")
             }
         }
     }

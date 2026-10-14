@@ -201,10 +201,39 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val db = AppDatabase.getInstance(context)
-            val dbTransactions = db.transactionDao().getAllTransactions().take(10)
+            val dbTransactions = walletId
+                ?.let { db.transactionDao().getTransactionsForWallet(it).take(10) }
+                .orEmpty()
+            val v3Transactions = walletId
+                ?.let { id -> db.nfcExchangeDao().getHistoryForWallet(id, 10) }
+                .orEmpty()
+                .filter { it.receiptEnvelope != null && it.amountCents != null }
+                .map { exchange ->
+                    com.example.prototipopagosoffline.database.TransactionHistory(
+                        idTransaccion = exchange.operationId,
+                        monto = requireNotNull(exchange.amountCents),
+                        timestamp = java.time.Instant.ofEpochSecond(exchange.createdAtEpochSeconds).toString(),
+                        comercioId = 0,
+                        tokenId = requireNotNull(exchange.walletId),
+                        firma = "",
+                        payloadOriginal = "",
+                        clavePublica = "",
+                        isOutgoing = true,
+                        walletId = exchange.walletId,
+                        estadoSincronizacion = if (exchange.state == "SYNCED") {
+                            com.example.prototipopagosoffline.database.SyncState.SYNCED
+                        } else {
+                            com.example.prototipopagosoffline.database.SyncState.PENDING
+                        }
+                    )
+                }
+            val recent = (v3Transactions + dbTransactions)
+                .distinctBy { it.idTransaccion }
+                .sortedByDescending { it.timestamp }
+                .take(10)
             withContext(Dispatchers.Main) {
                 if (PaymentState.recentTransactions.isEmpty()) {
-                    PaymentState.recentTransactions.addAll(dbTransactions)
+                    PaymentState.recentTransactions.addAll(recent)
                 }
             }
         }
@@ -340,14 +369,18 @@ fun HomeScreen(
                             }
                             response.body()?.let { balance ->
                                 val db = AppDatabase.getInstance(context)
-                                val current = db.walletDao().getWalletById(currentWalletId)
                                 db.walletDao().insertWallet(
                                     com.example.prototipopagosoffline.database.OfflineWallet(
                                         id = currentWalletId,
                                         confirmedBalanceCents = balance.confirmed_balance_cents,
-                                        reservedBalanceCents = current?.reservedBalanceCents ?: 0,
+                                        reservedBalanceCents = 0,
                                         currency = balance.currency
                                     )
+                                )
+                                db.walletDao().updateConfirmedBalance(
+                                    currentWalletId,
+                                    balance.confirmed_balance_cents,
+                                    balance.currency
                                 )
                             }
                         } catch (e: Exception) {

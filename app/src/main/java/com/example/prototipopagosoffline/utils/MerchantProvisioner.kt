@@ -60,6 +60,7 @@ class MerchantProvisioner(
             createdAtEpochSeconds = now().epochSecond
         )
         database.withTransaction {
+            database.nfcExchangeDao().revokeInventory("wallet")
             trustedWallets.forEach { trusted ->
                 require(trusted.purpose == "wallet" && trusted.key_id.isNotBlank())
                 database.nfcExchangeDao().insertTrustedKey(
@@ -67,7 +68,8 @@ class MerchantProvisioner(
                         keyId = trusted.key_id,
                         fingerprint = trusted.fingerprint,
                         publicKeyBase64 = trusted.public_key_b64,
-                        ownerType = "wallet"
+                        ownerType = "wallet",
+                        scopeId = trusted.scope_id
                     )
                 )
             }

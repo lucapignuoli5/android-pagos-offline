@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WalletDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWallet(wallet: OfflineWallet)
+
+    @Query("UPDATE offline_wallet SET confirmed_balance_cents = :confirmedBalance, currency = :currency WHERE id = :walletId")
+    suspend fun updateConfirmedBalance(walletId: String, confirmedBalance: Long, currency: String = "ARS"): Int
 
     @Query("SELECT * FROM offline_wallet WHERE id = :id LIMIT 1")
     suspend fun getWalletById(id: String): OfflineWallet?

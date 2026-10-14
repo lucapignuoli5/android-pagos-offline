@@ -31,11 +31,18 @@ data class NfcExchange(
     @ColumnInfo(name = "cancelled_at_epoch_seconds") val cancelledAtEpochSeconds: Long? = null
 )
 
-@Entity(tableName = "trusted_public_keys", indices = [Index(value = ["fingerprint"], unique = true)])
+@Entity(
+    tableName = "trusted_public_keys",
+    indices = [
+        Index(value = ["fingerprint"], unique = true),
+        Index(value = ["owner_type", "scope_id"])
+    ]
+)
 data class TrustedPublicKey(
     @PrimaryKey @ColumnInfo(name = "key_id") val keyId: String,
     val fingerprint: String,
     @ColumnInfo(name = "public_key_b64") val publicKeyBase64: String,
     @ColumnInfo(name = "owner_type") val ownerType: String,
+    @ColumnInfo(name = "scope_id") val scopeId: String? = null,
     val revoked: Boolean = false
 )

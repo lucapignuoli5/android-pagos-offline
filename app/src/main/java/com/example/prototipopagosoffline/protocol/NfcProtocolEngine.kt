@@ -132,7 +132,7 @@ class NfcProtocolEngine(
 }
 
 interface TrustedPublicKeyResolver {
-    suspend fun resolve(keyId: String, fingerprint: String): String?
+    suspend fun resolve(keyId: String, fingerprint: String, scopeId: String? = null): String?
 }
 
 interface NfcExchangeStore {

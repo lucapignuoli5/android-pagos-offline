@@ -19,6 +19,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Base64
+import java.util.UUID
 
 class OfflineProvisioner(
     private val database: AppDatabase,
@@ -45,16 +46,20 @@ class OfflineProvisioner(
 
         val trustedPosResponse = api.getTrustedKeys("pos")
         require(trustedPosResponse.isSuccessful) { "No se pudieron actualizar las claves POS" }
-        requireNotNull(trustedPosResponse.body()).forEach { trusted ->
-            require(trusted.purpose == "pos" && trusted.key_id.isNotBlank())
-            database.nfcExchangeDao().insertTrustedKey(
-                TrustedPublicKey(
-                    keyId = trusted.key_id,
-                    fingerprint = trusted.fingerprint,
-                    publicKeyBase64 = trusted.public_key_b64,
-                    ownerType = "pos"
+        database.withTransaction {
+            database.nfcExchangeDao().revokeInventory("pos")
+            requireNotNull(trustedPosResponse.body()).forEach { trusted ->
+                require(trusted.purpose == "pos" && trusted.key_id.isNotBlank())
+                database.nfcExchangeDao().insertTrustedKey(
+                    TrustedPublicKey(
+                        keyId = trusted.key_id,
+                        fingerprint = trusted.fingerprint,
+                        publicKeyBase64 = trusted.public_key_b64,
+                        ownerType = "pos",
+                        scopeId = trusted.scope_id
+                    )
                 )
-            )
+            }
         }
 
         val balanceResponse = api.getWalletBalance(login.wallet_id)
@@ -75,6 +80,9 @@ class OfflineProvisioner(
         }
         val authorizationResponse = api.createOfflineAuthorizationV3(
             OfflineAuthorizationRequest(
+                request_id = UUID.nameUUIDFromBytes(
+                    "${login.wallet_id}:${key.keyId}:${now().epochSecond / 86400}".toByteArray(Charsets.UTF_8)
+                ).toString(),
                 wallet_id = login.wallet_id,
                 wallet_key_id = key.keyId,
                 max_payment_cents = ProtocolV2.MAX_AMOUNT_CENTS,
@@ -111,15 +119,17 @@ class OfflineProvisioner(
     }
 
     private suspend fun saveWallet(confirmedBalance: Long, walletId: String) {
-        val current = database.walletDao().getWalletById(walletId)
         database.walletDao().insertWallet(
             OfflineWallet(
                 id = walletId,
                 confirmedBalanceCents = confirmedBalance,
-                reservedBalanceCents = current?.reservedBalanceCents ?: 0,
+                reservedBalanceCents = 0,
                 currency = ProtocolV2.CURRENCY
             )
         )
+        check(database.walletDao().updateConfirmedBalance(
+            walletId, confirmedBalance, ProtocolV2.CURRENCY
+        ) == 1)
     }
 
     private fun registrationNonce(): String {

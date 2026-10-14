@@ -50,7 +50,7 @@ class NfcProtocolEngineTest {
         val unknownKeyEngine = NfcProtocolEngine(
             store,
             object : TrustedPublicKeyResolver {
-                override suspend fun resolve(keyId: String, fingerprint: String): String? = null
+                override suspend fun resolve(keyId: String, fingerprint: String, scopeId: String?): String? = null
             },
             now = { Instant.parse("2026-10-13T15:01:00Z") }
         )
@@ -94,7 +94,7 @@ class NfcProtocolEngineTest {
     private fun engine(store: MemoryStore) = NfcProtocolEngine(
         store,
         object : TrustedPublicKeyResolver {
-            override suspend fun resolve(keyId: String, fingerprint: String): String? = publicKeyBase64
+            override suspend fun resolve(keyId: String, fingerprint: String, scopeId: String?): String? = publicKeyBase64
         },
         now = { Instant.parse("2026-10-13T15:01:00Z") }
     )

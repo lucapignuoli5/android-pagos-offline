@@ -15,7 +15,9 @@ class ClientPaymentExchangeService(
             require(Instant.parse(envelope.payload["expires_at"].asString).isAfter(now()))
             val keyId = envelope.payload["pos_key_id"].asString
             val fingerprint = envelope.payload["pos_key_fingerprint"].asString
-            val publicKey = trustedPosKeys.resolve(keyId, fingerprint)
+            val publicKey = trustedPosKeys.resolve(
+                keyId, fingerprint, envelope.payload["terminal_id"].asString
+            )
                 ?: throw IllegalStateException("Clave POS no confiable")
             require(ProtocolV3.verifyPosSigner(
                 envelope, publicKey, keyId, fingerprint,
@@ -48,7 +50,9 @@ class ClientPaymentExchangeService(
             require(ProtocolV3.validatePayload(envelope.payload) == MessageTypeV3.PAYMENT_ACK)
             val keyId = envelope.payload["pos_key_id"].asString
             val fingerprint = envelope.payload["pos_key_fingerprint"].asString
-            val publicKey = trustedPosKeys.resolve(keyId, fingerprint)
+            val publicKey = trustedPosKeys.resolve(
+                keyId, fingerprint, envelope.payload["terminal_id"].asString
+            )
                 ?: throw IllegalStateException("Clave POS no confiable")
             require(ProtocolV3.verifyPosSigner(
                 envelope, publicKey, keyId, fingerprint,
