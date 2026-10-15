@@ -543,3 +543,12 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Implementación: secreto/UUID cifrados por rol se conservan tras logout; login demo sustituye credenciales embebidas. Configuración pública externa compartida con Android Studio, debug aislado .manual, Room sin cambios.
 - Verificación: assembleDebug y assembleDebugAndroidTest correctos tanto por launcher como compilación directa sin variables demo. Primer intento Gradle falló por resolución de java.util.Properties; corregido con import explícito. No tests ni pagos.
 - Instalación: APK demo actualizado en SM-S721B mediante adb install -r (Success), conservando datos. Otro teléfono pendiente de actualización con el mismo APK.
+
+## TFG-C8-AN-06 — URL efectiva de Android Studio
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Evidencia: BuildConfig generado por Android Studio contiene example.invalid pese a demo.local.properties con dominio correcto; gradle.properties tenía API_BASE_URL de ejemplo con mayor prioridad.
+- Corrección: retirar override de ejemplo y bloquear dirección inerte cuando existe configuración local demo. Conservar bases, identidades y claves.
+- Verificación: compilación y revisión de URL generada, sin peticiones ni pagos.
+- Commit: fix(android): [TFG-C8-AN-06] usar dominio demo en Android Studio.
+- Resultado: assembleDebug y assembleDebugAndroidTest correctos (BUILD SUCCESSFUL). URL generada contrastada exactamente con dominio ngrok y applicationId .manual; compilación directa sin variables demo.
+- Archivos: gradle.properties, app/build.gradle.kts, AGENTS.md y registros. Sin pruebas, arranque, pagos ni instalación; el usuario instalará desde Android Studio.

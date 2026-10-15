@@ -97,3 +97,9 @@ solo opera con DEMO_DEVICE_LOGIN_ENABLED=true (launcher demo explícito); cuenta
 simuladas nuevas, sin reiniciar saldos al repetir. Cuentas previas se conservan.
 Android Studio usa demo.local.properties ignorado, generado por run_demo android-config
 con URL y claves PUBLICAS; no contraseñas/JWT. No transferir identidad a otros móviles.
+
+C8-AN-06: gradle.properties ya no fija API_BASE_URL=example.invalid ni credenciales
+demo vacías. Configuración pública local determina URL al ejecutar desde Studio;
+con demo.local.properties presente una URL example.invalid impide compilar.
+La compilación debe acompañarse de revisión de la URL efectiva generada; por sí
+sola no demuestra que el APK apunte al servidor configurado.

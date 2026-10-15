@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 
 plugins {
     alias(libs.plugins.android.application)
@@ -36,6 +37,9 @@ android {
             .trim()
         require(apiBaseUrl.startsWith("https://") && apiBaseUrl.endsWith("/")) {
             "API_BASE_URL debe ser una URL HTTPS terminada en /"
+        }
+        require(demoLocal.isEmpty() || URI(apiBaseUrl).host != "example.invalid") {
+            "La configuracion demo no puede usar example.invalid; revisar API_BASE_URL"
         }
         buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         val mercadoPagoEnabled = providers.environmentVariable("MERCADO_PAGO_ENABLED")
