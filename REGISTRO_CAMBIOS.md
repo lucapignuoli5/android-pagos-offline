@@ -512,3 +512,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Configuración real: dominio fijo y cuentas/identidad de la base externa nueva. Valores sensibles nunca se incluyen en registros.
 - Verificación: assembleDebug y assembleDebugAndroidTest correctos; valores de configuración comprobados por presencia sin imprimir credenciales. Instrumentadas no ejecutadas.
 - Datos: misma versión Room 16, sin alteración de bytes históricos ni bases originales; APK demo en carpeta externa.
+## TFG-C8-AN-03 — Limpieza recuperable de temporales Android
+
+- Fecha: 2026-10-14. Estado: COMPLETADA / RECUPERABLE.
+- Requisito: retirar intermediarios generados y logs de fallo antiguos.
+- Protección: conservar fuentes, schemas, Gradle/SDK/IDE vigente y APKs finales; no compilar ni ejecutar pruebas por limpieza.
+- Método: mover a archivo externo recuperable, con rutas verificadas y manifiesto; no cerrar procesos ni borrar datos.
+- Resultado: .kotlin (incluido su log rastreado errors-1780496860256.log), build raíz y app/build intermediates/tmp/kotlin/kspCaches/generated archivados; hs_err_pid10752.log retirado del checkout con respaldo y patrón Git para futuros logs JVM.
+- Archivo externo: `C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01`; registro general y manifiesto. APKs finales, fuentes, schemas, .idea y .gradle vigentes conservados.
+- Verificación: clasificación y límites de rutas, estado Git y diff; no pruebas ni compilación posterior. Las cachés se regeneran al compilar.
+- Commit: `chore(cleanup): [TFG-C8-AN-03] registrar limpieza de temporales`.

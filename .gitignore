@@ -9,6 +9,7 @@
 .externalNativeBuild
 .cxx
 .kotlin/
+hs_err_pid*.log
 
 # KeyStore / JKS
 *.jks
