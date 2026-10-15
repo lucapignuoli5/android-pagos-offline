@@ -108,3 +108,19 @@ C8-AN-07: el comercio muestra saldo confirmado Room de su cuenta, consultado al
 abrir el menú y tras conciliación; no PaymentState.merchantBalance ni suma local
 de pendientes. Refresco preserva reservas y comprueba sesión/terminal/usuario.
 No etiquetar saldo acumulado como ventas del día. Validación funcional manual pendiente.
+
+C8-AN-08: Application registra callback de Internet VALIDATED y recuperación
+WorkManager periódica de 15 min. Avisos inmediatos y despertadores diferidos
+están separados por cuenta; los diferidos no bloquean trabajo nuevo. SyncWorker
+serializa por cuenta en el proceso y usa token capturado; no cambia destinatario
+por cambiar sesión. Las cancelaciones se propagan. HTTP 401/403 pausa acceso
+con aviso, preserva evidencia/reservas y requiere reingreso; red transitoria
+reintenta con espera progresiva. Se refresca saldo confirmado de ambos roles.
+No prometer ejecución instantánea en segundo plano, tras forzar detención ni
+sin sesión de la cuenta; el sistema puede demorar. Compilación no demuestra
+recuperación física automática: pendiente de prueba manual en ambos teléfonos.
+
+C8-AN-08 también pausa HTTP de contrato/configuración no transitorios con
+ATTENTION_REQUIRED. La pausa queda asociada al digest del token, sin guardar
+JWT extra; sesión nueva no hereda una pausa ajena. Ver SINCRONIZACION_AUTOMATICA.md
+para límites Android y comprobaciones manuales pendientes.

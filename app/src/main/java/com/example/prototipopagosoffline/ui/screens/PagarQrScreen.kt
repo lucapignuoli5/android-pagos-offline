@@ -125,6 +125,7 @@ fun PagarQrScreen(
                                         coordinator.confirm(current.operationId, currentWallet)
                                     }
                                     reserved = true
+                                    SyncManager.enqueueSync(context)
                                     val receipt = when (confirmation) {
                                         is ConfirmationResult.Created -> confirmation.receiptEnvelope
                                         is ConfirmationResult.AlreadyCreated -> confirmation.receiptEnvelope

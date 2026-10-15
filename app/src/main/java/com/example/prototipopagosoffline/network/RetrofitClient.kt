@@ -41,4 +41,12 @@ object RetrofitClient {
             .build()
             .create(ApiService::class.java)
     }
+
+    fun authenticatedApi(token: String): ApiService = Retrofit.Builder()
+        .baseUrl(BuildConfig.API_BASE_URL)
+        .client(okHttpClient.newBuilder().addInterceptor { chain ->
+            chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer $token").build())
+        }.build())
+        .addConverterFactory(GsonConverterFactory.create())
+        .build().create(ApiService::class.java)
 }

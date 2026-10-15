@@ -17,6 +17,7 @@
         android:required="false" />
 
     <application
+        android:name=".PaymentsApplication"
         android:allowBackup="false"
         android:fullBackupOnly="false"
         android:networkSecurityConfig="@xml/network_security_config"

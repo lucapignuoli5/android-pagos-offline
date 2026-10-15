@@ -25,9 +25,9 @@ class MobilePosSyncRepository(
         val dao = database.mobilePosOperationDao()
         val candidates = dao.getSyncCandidates(terminalId, instant, limit)
         if (candidates.isEmpty()) return SyncRun(0, dao.getNextSyncAt(terminalId))
-        val response = runCatching {
+        val response = syncHttp {
             api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(candidates.map(::evidence)))
-        }.getOrNull()
+        }
         if (response == null || !response.isSuccessful || response.body() == null) {
             candidates.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
             return SyncRun(0, dao.getNextSyncAt(terminalId))

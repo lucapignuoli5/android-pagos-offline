@@ -562,3 +562,16 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Archivos: MainActivity.kt, SyncWorker.kt, MerchantBalanceRepository.kt, AGENTS y registros. Room sin migración; insert IGNORE y UPDATE de confirmado conservan reservas.
 - Diagnóstico: lectura SQLite mode=ro sobre demo externa mostró 200000 centavos confirmados para usuario comercial 2. No se alteró su saldo ni se ejecutaron pagos.
 - Verificación: assembleDebug y assembleDebugAndroidTest correctos; diff revisado. Sin tests ni instalación. Actualización del comercio debe conservar su sesión usuario 2 para ver ese saldo.
+
+## TFG-C8-AN-08 — Recuperación automática de conciliación
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Requisito: conciliar al recuperar Internet sin botón, en ambos roles y transportes.
+- Fallo estático: cadena única con tareas demoradas/backoff podía bloquear nuevos avisos; sin observador de Internet validado ni recuperación periódica. Cancelaciones de red absorbidas por runCatching.
+- Diseño: cola inmediata durable por cuenta, despertador separado para reintentos, recuperación periódica y callback validado de red; mutex por cuenta y API ligada al token capturado. Sesión inválida conserva evidencia y requiere reingreso.
+- Verificación: solo compilación, sin pruebas ni instalación. Commit: feat(sync): [TFG-C8-AN-08] conciliar al recuperar Internet.
+- Archivos: PaymentsApplication.kt, AndroidManifest.xml, AutoSyncMonitor.kt, SyncManager.kt, SyncRecoveryWorker.kt, SyncWorker.kt, SyncHttp.kt, RetrofitClient.kt, TokenManager.kt, MainActivity.kt, PagarQrScreen.kt, repositorios de conciliación/cierre/saldo comercial, guía y registros.
+- Resultado: compilaciones assembleDebug y assembleDebugAndroidTest correctas tras cambios finales; sin test, lint, simuladores, pagos, instalación ni cambios de base.
+- Revisión estática: condiciones de Internet, identidades de trabajos, token capturado, exclusión mutua, callbacks, cancelación, fronteras de reintento, reserva y actualización de confirmado. Sin migraciones Room, cambios de bytes firmados ni backend.
+- Errores HTTP definitivos de contrato/configuración requieren atención, 401/403 reingreso; pausas asociadas a digest de token. Logs solo códigos, rol y contadores.
+- Límites: Android puede diferir ejecución; recovery cada 15 min no es SLA, force-stop exige reapertura; serialización se limita al proceso. Sesión activa requerida y cuentas históricas no se remapean.
+- Entrega: APK externo actualizado; usuario instalará desde Android Studio. Commit local, sin push. Intercambio QR/NFC informado por usuario antes de esta unidad no acredita recuperación automática posterior.

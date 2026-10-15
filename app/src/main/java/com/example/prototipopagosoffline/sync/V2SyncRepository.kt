@@ -40,16 +40,16 @@ class V2SyncRepository(
         }
         val received = mutableListOf<OfflinePaymentResultV2>()
         if (v2.isNotEmpty()) {
-            val response = runCatching {
+            val response = syncHttp {
                 api.syncOfflinePaymentsV2(OfflinePaymentSyncV2Request(v2.map(::evidence)))
-            }.getOrNull()
+            }
             if (response?.isSuccessful == true && response.body() != null) received += response.body()!!.results
             else v2.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
         }
         if (v3.isNotEmpty()) {
-            val response = runCatching {
+            val response = syncHttp {
                 api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(v3.map { evidenceV3(it.first, it.second) }))
-            }.getOrNull()
+            }
             if (response?.isSuccessful == true && response.body() != null) {
                 val exchanges = v3.associateBy({ it.first.operationId }, { it.first })
                 received += response.body()!!.results.map { result ->
@@ -81,7 +81,7 @@ class V2SyncRepository(
             database.authorizationDao().getAuthorization(it)?.authorizationEnvelope != null
         } == true
         val result = if (initial.status == "PENDING_EVIDENCE" && !isV3) {
-            val statusResponse = runCatching { api.getOfflinePaymentStatus(exchange.operationId) }.getOrNull()
+            val statusResponse = syncHttp { api.getOfflinePaymentStatus(exchange.operationId) }
             val status = statusResponse?.body()
             if (statusResponse?.isSuccessful == true) {
                 validatedStatusResult(exchange.operationId, status) ?: initial
@@ -109,7 +109,7 @@ class V2SyncRepository(
     private suspend fun settleAccepted(exchange: NfcExchange, code: String?, instant: Long): Boolean {
         val walletId = exchange.walletId ?: return retryInvalid(exchange, instant)
         val amount = exchange.amountCents ?: return retryInvalid(exchange, instant)
-        val balanceResponse = runCatching { api.getWalletBalance(walletId) }.getOrNull()
+        val balanceResponse = syncHttp { api.getWalletBalance(walletId) }
         val balance = balanceResponse?.body()
         if (balanceResponse?.isSuccessful != true || balance == null || balance.wallet_id != walletId) {
             scheduleRetry(exchange, "BALANCE_REFRESH_REQUIRED", instant)

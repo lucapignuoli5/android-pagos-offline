@@ -19,7 +19,8 @@ class MerchantBalanceRepository(
             session.getToken() == token
         if (!sameSession()) return
         val walletId = "wallet-${terminal.userId}"
-        val response = api.getWalletBalance(walletId)
+        val response = syncHttp { api.getWalletBalance(walletId) }
+            ?: throw java.io.IOException("Saldo comercial temporalmente no disponible")
         check(response.isSuccessful) { "No se pudo actualizar el saldo comercial" }
         val balance = requireNotNull(response.body())
         require(balance.wallet_id == walletId && balance.currency == "ARS" && balance.confirmed_balance_cents >= 0)

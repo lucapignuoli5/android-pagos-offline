@@ -80,6 +80,10 @@ enum class UserRole { CLIENTE, COMERCIO, NONE }
 enum class AppScreen { ROLE_SELECTION, HOME, CLIENT, POS, COBRO_QR, PAGO_QR }
 
 class MainActivity : AppCompatActivity() {
+    override fun onStart() {
+        super.onStart()
+        com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(this)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -201,6 +205,11 @@ fun HomeScreen(
     }
     var confirmedBalanceCents by remember { mutableStateOf<Long?>(null) }
     var reservedBalanceCents by remember { mutableStateOf(0L) }
+    var syncPauseReason by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(role, walletId) {
+        TokenManager(context).observeSyncPauseReason().collect { syncPauseReason = it }
+    }
 
     LaunchedEffect(role, walletId) {
         if (role == UserRole.COMERCIO) withContext(Dispatchers.IO) {
@@ -274,6 +283,14 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(20.dp)
     ) {
+        if (syncPauseReason != null) {
+            Text(if (syncPauseReason == "REAUTH_REQUIRED")
+                "Sincronización pausada por falta de acceso. Los pagos pendientes se conservan."
+            else "La sincronización requiere revisar la configuración o evidencia. Los pagos pendientes se conservan.")
+            if (syncPauseReason == "REAUTH_REQUIRED") {
+                Button(onClick = onLogout) { Text("Volver a ingresar") }
+            }
+        }
         // Rediseño de UI específico del Cliente
         if (role == UserRole.CLIENTE) {
             Column(
@@ -893,6 +910,7 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                                 "Comercio aprovisionado",
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                             onRoleSelected(UserRole.COMERCIO)
                         }
                     } catch (_: Exception) {

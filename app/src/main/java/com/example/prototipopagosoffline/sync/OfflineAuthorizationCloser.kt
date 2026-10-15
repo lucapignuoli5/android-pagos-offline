@@ -25,7 +25,7 @@ class OfflineAuthorizationCloser(
             val prepared = if (authorization.closureState == "READY") authorization else prepare(authorization) ?: continue
             val closure = prepared.closureEnvelope ?: continue
             val manifest = prepared.closureManifest ?: continue
-            val response = runCatching {
+            val response = syncHttp {
                 api.closeOfflineAuthorizationV3(
                     prepared.id,
                     OfflineAuthorizationCloseRequest(
@@ -33,7 +33,7 @@ class OfflineAuthorizationCloser(
                         Base64.getEncoder().encodeToString(manifest)
                     )
                 )
-            }.getOrNull()
+            }
             if (response?.isSuccessful == true) database.authorizationDao().markClosed(prepared.id)
         }
     }

@@ -3,6 +3,10 @@ package com.example.prototipopagosoffline.utils
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import android.content.SharedPreferences
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 class TokenManager(context: Context) {
     private val masterKey = MasterKey.Builder(context)
@@ -23,6 +27,7 @@ class TokenManager(context: Context) {
             .putString("wallet_id", walletId)
             .putInt("user_id", userId)
             .putString("session_role", "cliente")
+            .remove("sync_access_required_for_token")
             .remove("terminal_id")
             .commit()
 
@@ -32,11 +37,12 @@ class TokenManager(context: Context) {
             .putString("terminal_id", terminalId)
             .putInt("user_id", userId)
             .putString("session_role", "comercio")
+            .remove("sync_access_required_for_token")
             .remove("wallet_id")
             .commit()
 
     fun saveToken(token: String) {
-        check(sharedPreferences.edit().putString("jwt_token", token).commit()) {
+        check(sharedPreferences.edit().putString("jwt_token", token).remove("sync_access_required_for_token").commit()) {
             "No se pudo guardar el token"
         }
     }
@@ -50,6 +56,30 @@ class TokenManager(context: Context) {
     fun getUserId(): Int? = sharedPreferences.getInt("user_id", -1).takeIf { it > 0 }
 
     fun getRole(): String? = sharedPreferences.getString("session_role", null)
+
+    fun syncPauseReason(): String? = getToken()?.let {
+        if (sharedPreferences.getString("sync_access_required_for_token", null) == tokenDigest(it))
+            sharedPreferences.getString("sync_pause_reason", null) else null
+    }
+
+    private fun tokenDigest(token: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(token.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+
+    fun observeSyncPauseReason() = callbackFlow<String?> {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            trySend(syncPauseReason())
+        }
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(syncPauseReason())
+        awaitClose { sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
+    fun markSyncPaused(token: String, reason: String) {
+        require(reason in setOf("REAUTH_REQUIRED", "ATTENTION_REQUIRED"))
+        if (getToken() == token) check(sharedPreferences.edit()
+            .putString("sync_access_required_for_token", tokenDigest(token))
+            .putString("sync_pause_reason", reason).commit())
+    }
 
     fun getTerminalId(): String? = sharedPreferences.getString("terminal_id", null)?.takeIf { it.isNotBlank() }
 
