@@ -522,3 +522,14 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Archivo externo: `C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01`; registro general y manifiesto. APKs finales, fuentes, schemas, .idea y .gradle vigentes conservados.
 - Verificación: clasificación y límites de rutas, estado Git y diff; no pruebas ni compilación posterior. Las cachés se regeneran al compilar.
 - Commit: `chore(cleanup): [TFG-C8-AN-03] registrar limpieza de temporales`.
+
+## TFG-C8-AN-04 — Identidad comercial por instalación
+
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Fallo observado: login 200 seguido de registro de clave 409 en el segundo teléfono; terminal y key_id derivados solo del usuario colisionan entre Keystores independientes.
+- Corrección prevista: conservar perfil local previo; terminal UUID para aprovisionamientos nuevos, persistido antes de enviar. No reemplazar claves registradas ni datos del servidor.
+- Verificación autorizada: compilación e instalación, sin pruebas ni pagos.
+- Commit: fix(android): [TFG-C8-AN-04] separar terminales comerciales por instalación.
+- Archivos: MerchantProvisioner.kt, TerminalKeyManager.kt, AGENTS.md y registros. Sin migración Room ni cambios del backend.
+- Verificación: assembleDebug y assembleDebugAndroidTest correctos (BUILD SUCCESSFUL); sin ejecutar tests ni pagos. APK demo externo actualizado.
+- Instalación: adb install -r devolvió Success en Samsung SM-G935F; sin borrar datos. Login corregido pendiente del reintento del usuario.

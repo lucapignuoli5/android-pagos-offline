@@ -85,3 +85,8 @@ Limpieza recuperable del 14/10/2026: temporales y auxiliares obsoletos archivado
 fuera del proyecto en C:\Users\anita\TFG-Archivo-Limpieza\2026-10-14-limpieza-01.
 Conservar ese archivo para recuperación; fuentes, bases, claves y APKs permanecen.
 No se ejecutaron pruebas ni se validó funcionamiento mediante esta limpieza.
+
+C8-AN-04: perfiles comerciales locales existentes conservan ID y clave. Nuevos
+aprovisionamientos usan UUID de terminal por instalación/cuenta, persistido antes
+del registro HTTP para reintentos. Una clave local ausente exige recuperación;
+no sustituir identidades del servidor para resolver conflictos entre teléfonos.

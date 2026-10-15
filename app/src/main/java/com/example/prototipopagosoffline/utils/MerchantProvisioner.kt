@@ -15,6 +15,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Base64
+import java.util.UUID
 
 class MerchantProvisioner(
     private val database: AppDatabase,
@@ -23,10 +24,31 @@ class MerchantProvisioner(
     private val now: () -> Instant = { Instant.now() }
 ) {
     suspend fun provision(login: LoginResponse): MobileTerminal {
-        val terminalId = "mobile-terminal-${login.user_id}"
+        // Reuse historical profiles, but never share a terminal ID across installations.
+        val saved = database.mobileTerminalDao().getForUser(login.user_id)
+        require(saved == null || keyManager.hasKey(saved.keyStoreAlias)) {
+            "Falta la clave del terminal guardado; se requiere recuperacion de identidad"
+        }
+        val terminalId = saved?.terminalId ?: "mobile-terminal-${UUID.randomUUID()}"
         val merchantId = "merchant-${login.user_id}"
-        val keyId = "mobile-pos-key-${sha256(terminalId).take(24)}"
+        val keyId = saved?.posKeyId ?: "mobile-pos-key-${sha256(terminalId).take(24)}"
         val key = keyManager.ensureKey(terminalId, keyId)
+        require(saved == null || (saved.keyStoreAlias == key.alias &&
+            saved.posKeyFingerprint == key.fingerprint && saved.publicKeyBase64 == key.publicKeyBase64)) {
+            "La clave local no coincide con la identidad del terminal"
+        }
+        val terminal = saved ?: MobileTerminal(
+            terminalId = terminalId,
+            merchantId = merchantId,
+            userId = login.user_id,
+            posKeyId = key.keyId,
+            posKeyFingerprint = key.fingerprint,
+            keyStoreAlias = key.alias,
+            publicKeyBase64 = key.publicKeyBase64,
+            createdAtEpochSeconds = now().epochSecond
+        )
+        // Persist identity before HTTP so a lost response retries the same key and scope.
+        if (saved == null) database.mobileTerminalDao().upsert(terminal)
         val proof = buildTerminalRegistrationProof(
             login.user_id,
             terminalId,
@@ -49,16 +71,6 @@ class MerchantProvisioner(
         val trustedResponse = api.getTrustedKeys("wallet")
         require(trustedResponse.isSuccessful) { "No se pudieron actualizar las claves de billetera" }
         val trustedWallets = requireNotNull(trustedResponse.body())
-        val terminal = MobileTerminal(
-            terminalId = terminalId,
-            merchantId = merchantId,
-            userId = login.user_id,
-            posKeyId = key.keyId,
-            posKeyFingerprint = key.fingerprint,
-            keyStoreAlias = key.alias,
-            publicKeyBase64 = key.publicKeyBase64,
-            createdAtEpochSeconds = now().epochSecond
-        )
         database.withTransaction {
             database.nfcExchangeDao().revokeInventory("wallet")
             trustedWallets.forEach { trusted ->

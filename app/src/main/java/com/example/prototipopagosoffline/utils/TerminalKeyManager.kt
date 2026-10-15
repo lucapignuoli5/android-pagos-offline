@@ -20,6 +20,9 @@ data class TerminalKeyMaterial(
 class TerminalKeyManager {
     private val keyStoreName = "AndroidKeyStore"
 
+    fun hasKey(alias: String): Boolean =
+        KeyStore.getInstance(keyStoreName).apply { load(null) }.containsAlias(alias)
+
     fun ensureKey(terminalId: String, keyId: String): TerminalKeyMaterial {
         val alias = alias(terminalId, keyId)
         val keyStore = KeyStore.getInstance(keyStoreName).apply { load(null) }
