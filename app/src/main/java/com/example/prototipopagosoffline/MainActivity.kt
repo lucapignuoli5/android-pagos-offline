@@ -786,21 +786,8 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                 isLoading = true
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        if (BuildConfig.DEMO_USERNAME.isBlank() || BuildConfig.DEMO_PASSWORD.isBlank()) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                isLoading = false
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Credenciales de demostración no configuradas",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                            return@launch
-                        }
-
-                        val request = com.example.prototipopagosoffline.network.LoginRequest(BuildConfig.DEMO_USERNAME, BuildConfig.DEMO_PASSWORD)
-                        val response = com.example.prototipopagosoffline.network.RetrofitClient.apiService.login(request)
-
+                        val response = RetrofitClient.apiService.deviceLogin(
+                            TokenManager(context).demoIdentity("cliente"))
                         if (response.isSuccessful && response.body() != null) {
                             val login = response.body()!!
                             val tokenManager = com.example.prototipopagosoffline.utils.TokenManager(context)
@@ -852,26 +839,8 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                 isLoading = true
                 scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        if (
-                            BuildConfig.DEMO_MERCHANT_USERNAME.isBlank() ||
-                            BuildConfig.DEMO_MERCHANT_PASSWORD.isBlank()
-                        ) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                isLoading = false
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Credenciales de comercio no configuradas",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                            return@launch
-                        }
-                        val response = com.example.prototipopagosoffline.network.RetrofitClient.apiService.login(
-                            com.example.prototipopagosoffline.network.LoginRequest(
-                                BuildConfig.DEMO_MERCHANT_USERNAME,
-                                BuildConfig.DEMO_MERCHANT_PASSWORD
-                            )
-                        )
+                        val response = RetrofitClient.apiService.deviceLogin(
+                            TokenManager(context).demoIdentity("comercio"))
                         if (!response.isSuccessful || response.body() == null) {
                             error("Credenciales de comercio invalidas")
                         }

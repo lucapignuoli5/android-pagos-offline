@@ -10,6 +10,7 @@
 .cxx
 .kotlin/
 hs_err_pid*.log
+demo.local.properties
 
 # KeyStore / JKS
 *.jks

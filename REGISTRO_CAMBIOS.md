@@ -533,3 +533,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Archivos: MerchantProvisioner.kt, TerminalKeyManager.kt, AGENTS.md y registros. Sin migración Room ni cambios del backend.
 - Verificación: assembleDebug y assembleDebugAndroidTest correctos (BUILD SUCCESSFUL); sin ejecutar tests ni pagos. APK demo externo actualizado.
 - Instalación: adb install -r devolvió Success en Samsung SM-G935F; sin borrar datos. Login corregido pendiente del reintento del usuario.
+
+## TFG-C8-AN-05 — Acceso de demostración con un toque
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Requisito: reemplazar dependencia de credenciales al compilar por identidad aleatoria persistida cifrada por instalación/rol. No borrar identidades ni pendientes previos.
+- Configuración Android Studio: URL y emisor público externos; sin contraseñas embebidas. Sin pruebas, solo compilación.
+- Commit: feat(android): [TFG-C8-AN-05] ingresar en demo sin contraseña manual.
+- Archivos: MainActivity.kt, ApiService.kt, TokenManager.kt, app/build.gradle.kts, .gitignore, AGENTS y registros.
+- Implementación: secreto/UUID cifrados por rol se conservan tras logout; login demo sustituye credenciales embebidas. Configuración pública externa compartida con Android Studio, debug aislado .manual, Room sin cambios.
+- Verificación: assembleDebug y assembleDebugAndroidTest correctos tanto por launcher como compilación directa sin variables demo. Primer intento Gradle falló por resolución de java.util.Properties; corregido con import explícito. No tests ni pagos.
+- Instalación: APK demo actualizado en SM-S721B mediante adb install -r (Success), conservando datos. Otro teléfono pendiente de actualización con el mismo APK.

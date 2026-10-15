@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+val demoLocal = Properties().apply {
+    val source = rootProject.file("demo.local.properties")
+    if (source.isFile) source.inputStream().use { load(it) }
 }
 
 android {
@@ -22,37 +29,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["appLabel"] = "@string/app_name"
 
-        val demoUsername = providers.environmentVariable("DEMO_USERNAME")
-            .orElse(providers.gradleProperty("DEMO_USERNAME"))
-            .orElse("")
-            .get()
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        val demoPassword = providers.environmentVariable("DEMO_PASSWORD")
-            .orElse(providers.gradleProperty("DEMO_PASSWORD"))
-            .orElse("")
-            .get()
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        buildConfigField("String", "DEMO_USERNAME", "\"$demoUsername\"")
-        buildConfigField("String", "DEMO_PASSWORD", "\"$demoPassword\"")
-        val merchantUsername = providers.environmentVariable("DEMO_MERCHANT_USERNAME")
-            .orElse(providers.gradleProperty("DEMO_MERCHANT_USERNAME"))
-            .orElse("")
-            .get()
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        val merchantPassword = providers.environmentVariable("DEMO_MERCHANT_PASSWORD")
-            .orElse(providers.gradleProperty("DEMO_MERCHANT_PASSWORD"))
-            .orElse("")
-            .get()
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-        buildConfigField("String", "DEMO_MERCHANT_USERNAME", "\"$merchantUsername\"")
-        buildConfigField("String", "DEMO_MERCHANT_PASSWORD", "\"$merchantPassword\"")
         val apiBaseUrl = providers.environmentVariable("API_BASE_URL")
             .orElse(providers.gradleProperty("API_BASE_URL"))
-            .orElse("https://example.invalid/")
+            .orElse(demoLocal.getProperty("API_BASE_URL", "https://example.invalid/"))
             .get()
             .trim()
         require(apiBaseUrl.startsWith("https://") && apiBaseUrl.endsWith("/")) {
@@ -66,7 +45,7 @@ android {
             .toBooleanStrictOrNull() ?: false
         buildConfigField("boolean", "MERCADO_PAGO_ENABLED", mercadoPagoEnabled.toString())
         fun configuredString(name: String): String = providers.environmentVariable(name)
-            .orElse(providers.gradleProperty(name)).orElse("").get()
+            .orElse(providers.gradleProperty(name)).orElse(demoLocal.getProperty(name, "")).get()
             .replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "ISSUER_PUBLIC_KEY_B64", "\"${configuredString("ISSUER_PUBLIC_KEY_B64")}\"")
         buildConfigField("String", "ISSUER_KEY_ID", "\"${configuredString("ISSUER_KEY_ID")}\"")
@@ -75,7 +54,9 @@ android {
 
     buildTypes {
         getByName("debug") {
-            if (providers.environmentVariable("DEMO_ISOLATED_INSTALL").orElse("false").get().toBoolean()) {
+            if (providers.environmentVariable("DEMO_ISOLATED_INSTALL")
+                .orElse(providers.gradleProperty("DEMO_ISOLATED_INSTALL"))
+                .orElse(demoLocal.getProperty("DEMO_ISOLATED_INSTALL", "false")).get().toBoolean()) {
                 applicationIdSuffix = ".manual"
                 manifestPlaceholders["appLabel"] = "Pagos Offline Demo"
             }

@@ -10,8 +10,11 @@ import retrofit2.http.Path
 
 data class LinkPagoRequest(val token_id: String, val monto: Int)
 data class LinkPagoResponse(val init_point: String)
+data class DeviceLoginRequest(val installation_id: String, val role: String, val device_secret: String)
 
 interface ApiService {
+    @POST("/api/demo/device-login")
+    suspend fun deviceLogin(@Body request: DeviceLoginRequest): Response<LoginResponse>
     @POST("sync-offline-payments")
     suspend fun syncPayments(@Body payments: List<SyncItem>): Response<Unit>
 

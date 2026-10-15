@@ -90,3 +90,10 @@ C8-AN-04: perfiles comerciales locales existentes conservan ID y clave. Nuevos
 aprovisionamientos usan UUID de terminal por instalación/cuenta, persistido antes
 del registro HTTP para reintentos. Una clave local ausente exige recuperación;
 no sustituir identidades del servidor para resolver conflictos entre teléfonos.
+
+Acceso demo C8-05/06: botones cliente/comercio usan identidad aleatoria cifrada
+por instalación y rol, conservada tras logout. El endpoint /api/demo/device-login
+solo opera con DEMO_DEVICE_LOGIN_ENABLED=true (launcher demo explícito); cuentas
+simuladas nuevas, sin reiniciar saldos al repetir. Cuentas previas se conservan.
+Android Studio usa demo.local.properties ignorado, generado por run_demo android-config
+con URL y claves PUBLICAS; no contraseñas/JWT. No transferir identidad a otros móviles.

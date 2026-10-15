@@ -59,6 +59,23 @@ class TokenManager(context: Context) {
     }
 
     @Synchronized
+    fun demoIdentity(role: String): com.example.prototipopagosoffline.network.DeviceLoginRequest {
+        require(role == "cliente" || role == "comercio")
+        val idKey = "demo_installation:$role"
+        val secretKey = "demo_device_secret:$role"
+        var id = sharedPreferences.getString(idKey, null)
+        var secret = sharedPreferences.getString(secretKey, null)
+        check((id == null) == (secret == null)) { "Identidad demo incompleta; requiere recuperacion" }
+        if (id == null) {
+            id = java.util.UUID.randomUUID().toString()
+            secret = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+                .joinToString("") { "%02x".format(it) }
+            check(sharedPreferences.edit().putString(idKey, id).putString(secretKey, secret).commit())
+        }
+        return com.example.prototipopagosoffline.network.DeviceLoginRequest(id, role, requireNotNull(secret))
+    }
+
+    @Synchronized
     fun pendingRequestId(kind: String, walletId: String): String {
         val name = "pending_request:$kind:$walletId"
         sharedPreferences.getString(name, null)?.let { return it }
