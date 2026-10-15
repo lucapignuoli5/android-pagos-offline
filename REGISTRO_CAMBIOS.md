@@ -575,3 +575,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Errores HTTP definitivos de contrato/configuración requieren atención, 401/403 reingreso; pausas asociadas a digest de token. Logs solo códigos, rol y contadores.
 - Límites: Android puede diferir ejecución; recovery cada 15 min no es SLA, force-stop exige reapertura; serialización se limita al proceso. Sesión activa requerida y cuentas históricas no se remapean.
 - Entrega: APK externo actualizado; usuario instalará desde Android Studio. Commit local, sin push. Intercambio QR/NFC informado por usuario antes de esta unidad no acredita recuperación automática posterior.
+
+## TFG-C8-AN-09 — Instrucciones Android actualizadas
+- Fecha: 2026-10-15. Estado: COMPROBADO DOCUMENTAL / SIN NUEVA VALIDACIÓN FUNCIONAL.
+- Requisito: instrucciones breves y coherentes con Room 16, v3, acceso individual demo, configuración Studio y sincronización automática. Separar compilaciones verificadas y pruebas manuales informadas de suites/hardware pendientes.
+- Verificación: lectura de fuentes y registros, estado Git y diff. Sin pruebas, compilación ni instalación.
+- Commit: docs(agents): [TFG-C8-AN-09] actualizar contexto Android y evidencia.
+- Resultado: AGENTS del área consolidado, sin instrucciones contradictorias de versiones ni garantías heredadas; evidencia manual y pendientes separados. Se ajustó contexto compartido general y registro consolidado.
+- Archivos del commit: AGENTS.md y REGISTRO_CAMBIOS.md. No código, configuración, datos ni entregas históricas. Revisados fuentes seleccionadas y diff; ninguna prueba ni compilación ejecutada.
