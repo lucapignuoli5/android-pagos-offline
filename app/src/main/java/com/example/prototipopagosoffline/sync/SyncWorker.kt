@@ -28,7 +28,9 @@ class SyncWorker(
                     result
                 }
                 "comercio" -> {
-                    MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
+                    val result = MobilePosSyncRepository(database, RetrofitClient.apiService).syncDue(accountId)
+                    MerchantBalanceRepository(database, RetrofitClient.apiService, tokenManager).refresh(accountId)
+                    result
                 }
                 else -> return Result.success()
             }

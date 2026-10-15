@@ -103,3 +103,8 @@ demo vacías. Configuración pública local determina URL al ejecutar desde Stud
 con demo.local.properties presente una URL example.invalid impide compilar.
 La compilación debe acompañarse de revisión de la URL efectiva generada; por sí
 sola no demuestra que el APK apunte al servidor configurado.
+
+C8-AN-07: el comercio muestra saldo confirmado Room de su cuenta, consultado al
+abrir el menú y tras conciliación; no PaymentState.merchantBalance ni suma local
+de pendientes. Refresco preserva reservas y comprueba sesión/terminal/usuario.
+No etiquetar saldo acumulado como ventas del día. Validación funcional manual pendiente.

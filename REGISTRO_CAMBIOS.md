@@ -552,3 +552,13 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: fix(android): [TFG-C8-AN-06] usar dominio demo en Android Studio.
 - Resultado: assembleDebug y assembleDebugAndroidTest correctos (BUILD SUCCESSFUL). URL generada contrastada exactamente con dominio ngrok y applicationId .manual; compilación directa sin variables demo.
 - Archivos: gradle.properties, app/build.gradle.kts, AGENTS.md y registros. Sin pruebas, arranque, pagos ni instalación; el usuario instalará desde Android Studio.
+
+## TFG-C8-AN-07 — Saldo confirmado del comercio
+- Fecha: 2026-10-14. Estado: COMPILA / FUNCIONAMIENTO PENDIENTE DE PRUEBA MANUAL.
+- Evidencia: usuario observa ACCEPTED definitivo en backend y caja cero. MainActivity muestra PaymentState.merchantBalance volátil; sincronización comercial no refresca saldo.
+- Corrección: consultar saldo confirmado por cuenta comercial, persistir Room y observarlo en pantalla al ingresar y después de conciliar. No modificar contabilidad ni reenviar pagos manualmente.
+- Verificación autorizada: compilación, sin pruebas ni instalación; usuario usa Android Studio.
+- Commit: fix(android): [TFG-C8-AN-07] refrescar saldo comercial conciliado.
+- Archivos: MainActivity.kt, SyncWorker.kt, MerchantBalanceRepository.kt, AGENTS y registros. Room sin migración; insert IGNORE y UPDATE de confirmado conservan reservas.
+- Diagnóstico: lectura SQLite mode=ro sobre demo externa mostró 200000 centavos confirmados para usuario comercial 2. No se alteró su saldo ni se ejecutaron pagos.
+- Verificación: assembleDebug y assembleDebugAndroidTest correctos; diff revisado. Sin tests ni instalación. Actualización del comercio debe conservar su sesión usuario 2 para ver ese saldo.

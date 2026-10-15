@@ -194,9 +194,30 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val walletId = remember { TokenManager(context).getWalletId() }
+    val walletId = remember(role) {
+        val session = TokenManager(context)
+        if (role == UserRole.COMERCIO) session.getUserId()?.let { "wallet-$it" }
+        else session.getWalletId()
+    }
     var confirmedBalanceCents by remember { mutableStateOf<Long?>(null) }
     var reservedBalanceCents by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(role, walletId) {
+        if (role == UserRole.COMERCIO) withContext(Dispatchers.IO) {
+            val session = TokenManager(context)
+            session.getTerminalId()?.let { terminal ->
+                try {
+                    com.example.prototipopagosoffline.sync.MerchantBalanceRepository(
+                        AppDatabase.getInstance(context), RetrofitClient.apiService, session
+                    ).refresh(terminal)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Offline: retain the last confirmed value stored for this account.
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -460,13 +481,15 @@ fun HomeScreen(
                     Box(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                         Column {
                             Text(
-                                text = "Ventas del Día (Caja)",
+                                text = "Saldo confirmado del comercio",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "$${String.format(java.util.Locale.US, "%.2f", PaymentState.merchantBalance)}",
+                                text = confirmedBalanceCents?.let {
+                                    "$${java.math.BigDecimal.valueOf(it, 2).toPlainString()}"
+                                } ?: "Sin saldo confirmado local",
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
