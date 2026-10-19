@@ -58,3 +58,12 @@ Leer `../../AGENTS.md` y este archivo antes de trabajar. Esta carpeta es un repo
 - No recompilar por una edición exclusivamente documental. Nuevas verificaciones de ejecución requieren autorización y entorno seguro; no bases originales ni servicios de pagos reales.
 - Actualizar registro consolidado y decisiones/instrucciones cuando corresponda. Antecedentes y detalles históricos permanecen en registros; no reescribir Entrega 4.
 - Diferenciar implementación, compilación, prueba ejecutada, informe manual e hipótesis. No aceptar como ciertos hallazgos o garantías de conversaciones anteriores sin comprobarlos.
+
+## Publicación autorizada — 19/10/2026
+
+El usuario autorizó explícitamente subir los commits actuales a origin/main con
+explicaciones específicas en español. Esta autorización prevalece sobre la regla
+anterior Sin push para esta publicación; no implica permiso general para publicar
+cambios futuros. No reescribir historia ni usar force-push. Ver
+PUBLICACION_GITHUB_2026-10-19.md; documentos remotos antiguos se preservan como
+antecedentes y no revierten el contrato v3 ni habilitan integraciones reales.

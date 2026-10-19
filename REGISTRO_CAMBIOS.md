@@ -583,3 +583,16 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: docs(agents): [TFG-C8-AN-09] actualizar contexto Android y evidencia.
 - Resultado: AGENTS del área consolidado, sin instrucciones contradictorias de versiones ni garantías heredadas; evidencia manual y pendientes separados. Se ajustó contexto compartido general y registro consolidado.
 - Archivos del commit: AGENTS.md y REGISTRO_CAMBIOS.md. No código, configuración, datos ni entregas históricas. Revisados fuentes seleccionadas y diff; ninguna prueba ni compilación ejecutada.
+
+## TFG-C8-AN-10 — Publicación autorizada en GitHub
+
+- Fecha: 2026-10-19. Estado: COMPROBADO LOCAL / PUBLICACIÓN AUTORIZADA.
+- Requisito: subir commits locales con descripciones específicas en español. La autorización actual reemplaza la restricción previa Sin push solo para esta publicación.
+- Estado inicial: main limpio; origin/main actualizado mediante fetch diverge en dos commits remotos de julio. No modificar datos, código funcional ni historial publicado.
+- Integración prevista: conservar árbol funcional local mediante merge ours sin reescritura; preservar commits remotos como ancestros y archivar sus documentos como antecedentes no vigentes. No importar código heredado incompatible, ._* ni herramientas .agents ajenas al runtime.
+- Verificación: inspección de cambios y secretos sin reproducir valores, diff y comprobación de referencias Git. Sin pruebas, compilación, instalaciones, arranques ni pagos.
+- Asunto exacto: `docs(publicacion): [TFG-C8-AN-10] publicar pagos locales y sincronización automática`.
+- Corte preservado: b555c8c; remoto integrado: 1b70c7c. Revisión independiente de compatibilidad e inspección heurística de secretos sin valores. No se detectaron secretos nuevos por los patrones revisados; no equivale a garantía absoluta.
+- Archivos: PUBLICACION_GITHUB_2026-10-19.md, antecedentes/github_2026-07-06/*.md, AGENTS.md y este registro. Todos los cambios del árbol de esta unidad son Markdown; código funcional y datos conservados.
+- Resultado: merge con historia completa preparado, referencias remotas verificables y mensajes de commit detallados en español. Confirmación de subida a origin/main se comunicará tras git push y contraste de hash remoto.
+- Antecedentes copiados byte a byte: conservan espacios finales históricos señalados por diff --check. Se verifica limpieza del resto del diff; no se reescriben originales para eliminar esos avisos.
