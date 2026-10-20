@@ -53,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -719,9 +720,17 @@ fun ClientScreen(
     val context = LocalContext.current
     val database = remember { AppDatabase.getInstance(context) }
     val coordinator = remember { com.example.prototipopagosoffline.utils.OfflinePaymentCoordinator(database) }
-    val walletId = remember { TokenManager(context).getWalletId() }
-    var pending by remember { mutableStateOf<com.example.prototipopagosoffline.database.NfcExchange?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    val session = remember { TokenManager(context) }
+    val walletId = remember { session.getWalletId() }
+    var pending by remember(walletId) { mutableStateOf<com.example.prototipopagosoffline.database.NfcExchange?>(null) }
+    var activeOperationId by rememberSaveable(walletId) {
+        mutableStateOf(walletId?.let { session.getNfcOperationId(it) })
+    }
+    var activeExchange by remember(walletId, activeOperationId) {
+        mutableStateOf<com.example.prototipopagosoffline.database.NfcExchange?>(null)
+    }
+    var errorMessage by remember(walletId, activeOperationId) { mutableStateOf<String?>(null) }
+    var confirming by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val nfcAdapter = android.nfc.NfcAdapter.getDefaultAdapter(context)
@@ -739,10 +748,30 @@ fun ClientScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(walletId) {
         walletId?.let { account ->
             database.nfcExchangeDao().observeOldestPendingRequest(account).collect { pending = it }
         }
+    }
+
+    LaunchedEffect(walletId, activeOperationId) {
+        val account = walletId ?: return@LaunchedEffect
+        val operationId = activeOperationId ?: return@LaunchedEffect
+        database.nfcExchangeDao().observeExchange(operationId, account).collect { exchange ->
+            activeExchange = exchange
+            if (exchange == null) {
+                session.setNfcOperationId(account, null)
+                activeOperationId = null
+            }
+        }
+    }
+    val current = if (activeOperationId == null) pending else activeExchange
+    val leaveScreen: () -> Unit = {
+        if (current == null || current.receiptEnvelope == null || current.ackEnvelope != null ||
+            current.state in setOf("SYNCED", "REJECTED", "CONFLICT")) {
+            walletId?.let { session.setNfcOperationId(it, null) }
+        }
+        onBack()
     }
 
     Column(
@@ -755,11 +784,11 @@ fun ClientScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = leaveScreen) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Atrás")
             }
             Text(
-                text = "Solicitud de pago",
+                text = "Pagar con NFC",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -767,35 +796,85 @@ fun ClientScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
-        if (pending == null) {
-            Text("Acercá el teléfono al POS para recibir una solicitud.", style = MaterialTheme.typography.bodyLarge)
+        if (current == null) {
+            Text(if (activeOperationId == null) "Acercá el teléfono al POS para recibir una solicitud."
+                else "Consultando el estado del pago…", style = MaterialTheme.typography.bodyLarge)
         } else {
-            val request = runCatching {
-                com.example.prototipopagosoffline.protocol.ProtocolV3.parseSignedEnvelope(pending!!.requestEnvelope).payload
-            }.getOrElse {
-                runCatching { com.example.prototipopagosoffline.protocol.ProtocolV2.parseSignedEnvelope(pending!!.requestEnvelope).payload }.getOrNull()
+            val request = remember(current.operationId) {
+                runCatching {
+                    com.example.prototipopagosoffline.protocol.ProtocolV3.parseSignedEnvelope(current.requestEnvelope).payload
+                }.getOrElse {
+                    runCatching { com.example.prototipopagosoffline.protocol.ProtocolV2.parseSignedEnvelope(current.requestEnvelope).payload }.getOrNull()
+                }
             }
             Text("Comercio: ${request?.get("merchant_id")?.asString ?: "desconocido"}", style = MaterialTheme.typography.titleMedium)
             Text("Importe: $${String.format(java.util.Locale.US, "%.2f", (request?.get("amount_cents")?.asLong ?: 0L) / 100.0)}", style = MaterialTheme.typography.headlineSmall)
             Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = {
-                scope.launch {
-                    try {
-                        val currentWalletId = walletId ?: error("Billetera no configurada")
-                        require(database.walletDao().getWalletById(currentWalletId) != null) {
-                            "Billetera no configurada"
-                        }
-                        coordinator.confirm(pending!!.operationId, currentWalletId)
-                        com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
-                        message = "Pago reservado. Acercá nuevamente el teléfono para entregar el comprobante."
-                    } catch (e: Exception) { message = e.message ?: "No se pudo confirmar" }
+            when {
+                current.state == "REJECTED" -> {
+                    Text("Pago rechazado", style = MaterialTheme.typography.headlineSmall)
+                    Text(if (current.resolutionEnvelope != null) "Resolución del servidor recibida."
+                        else "Consultá el historial para verificar la resolución.")
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("Confirmar pago") }
+                current.state == "CONFLICT" -> {
+                    Text("Pago en revisión", style = MaterialTheme.typography.headlineSmall)
+                    Text("La operación requiere atención. Consultá su estado en el historial.")
+                }
+                current.state == "SYNCED" && current.resolutionEnvelope != null -> {
+                    Text("Pago conciliado", style = MaterialTheme.typography.headlineSmall)
+                    Text("Confirmado por el servidor.")
+                }
+                current.ackEnvelope != null -> {
+                    Text("Pago aceptado localmente", style = MaterialTheme.typography.headlineSmall)
+                    Text("Acuse verificado y guardado. Se conciliará al recuperar Internet.")
+                }
+                current.receiptEnvelope != null -> {
+                    Text("Pago reservado", style = MaterialTheme.typography.headlineSmall)
+                    Text("Acercá nuevamente el teléfono para entregar el comprobante y recibir la confirmación del comercio.")
+                }
+                current.state == "REQUEST_RECEIVED" -> {
+                    Button(onClick = {
+                        val operationId = current.operationId
+                        activeOperationId = operationId
+                        errorMessage = null
+                        confirming = true
+                        scope.launch {
+                            try {
+                                val account = walletId ?: error("Billetera no configurada")
+                                require(database.walletDao().getWalletById(account) != null) {
+                                    "Billetera no configurada"
+                                }
+                                check(session.setNfcOperationId(account, operationId)) {
+                                    "No se pudo guardar la seleccion del pago"
+                                }
+                                coordinator.confirm(operationId, account)
+                                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
+                                errorMessage = error.message ?: "No se pudo confirmar"
+                            } finally {
+                                confirming = false
+                            }
+                        }
+                    }, enabled = !confirming, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (confirming) "Confirmando…" else "Confirmar pago")
+                    }
+                }
+                else -> Text("La solicitud venció o fue cancelada. Volvé al menú para iniciar otro pago.")
+            }
+            if (current.receiptEnvelope != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Operación: ${current.operationId}", style = MaterialTheme.typography.bodySmall)
+            }
         }
-        message?.let { Spacer(modifier = Modifier.height(16.dp)); Text(it, color = MaterialTheme.colorScheme.secondary) }
+        errorMessage?.let { Spacer(modifier = Modifier.height(16.dp)); Text(it, color = MaterialTheme.colorScheme.error) }
         Spacer(modifier = Modifier.weight(1f))
-        Button(onClick = onPagoQrClick, modifier = Modifier.fillMaxWidth()) { Text("Pagar con QR") }
+        if (activeOperationId == null) {
+            Button(onClick = onPagoQrClick, modifier = Modifier.fillMaxWidth()) { Text("Pagar con QR") }
+        } else {
+            Button(onClick = leaveScreen, modifier = Modifier.fillMaxWidth()) { Text("Volver al menú") }
+        }
     }
 }
 

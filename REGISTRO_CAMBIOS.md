@@ -660,3 +660,14 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Antes: comercio móvil no guardaba prueba final y finales antiguos no la recuperaban. Ahora: Room 17→18 añade resolución y estado PENDING/COMPLETE/ATTENTION_REQUIRED; comercio la guarda junto al final. Cliente/comercio consultan GET v3 para adjuntar solo evidencia verificada a finales sin blob, hasta 100 por cuenta/terminal. 404 o prueba inválida requieren atención individual; errores transitorios reintentan. «Actualizar/Sincronizar» permite reintento explícito.
 - Archivos: `database/AppDatabase.kt`, entidades/DAO de intercambios y comercio, schema `18.json`, `network/ApiService.kt`, `sync/V2SyncRepository.kt`, `sync/MobilePosSyncRepository.kt`, `sync/SyncManager.kt`, `sync/SyncWorker.kt`, `MainActivity.kt`, `AGENTS.md`, este registro.
 - Verificación: `assembleDebug` y `assembleDebugAndroidTest` completaron; instrumentadas no ejecutadas. Room 17→18 en datos existentes y recuperación histórica siguen pendientes. No desinstalar ni degradar APK como método de recuperación.
+
+## TFG-C13-AN-01 — Estado visible del pago NFC
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo manual: cliente queda en «Pago reservado» después del acuse recibido por NFC; QR sí muestra aceptación local.
+- Alcance: observar la operación persistida de la cuenta activa y presentar espera, aceptación local o resolución financiera según su estado. Sin modificar reservas, firmas ni transporte.
+- Antes/ahora: se observaban únicamente solicitudes REQUEST_RECEIVED y quedaba un mensaje volátil; ahora la operación seleccionada se observa en Room por ID/billetera tras reservar. Muestra espera, acuse verificado o resolución final, priorizando rechazo/revisión. El ID de selección NFC por cuenta permite volver del menú sin elegir por error un pago QR; limpiar selección no altera evidencia.
+- Archivos: `MainActivity.kt`, `database/NfcExchangeDao.kt`, `utils/TokenManager.kt`, este registro. Sin cambio de esquema, APDU, firmas o contabilidad.
+- Verificación: revisión estática de la ruta del acuse y filtros; `:app:assembleDebug` y `:app:assembleDebugAndroidTest` completaron con JBR 21. Instrumentadas solo compiladas; sin ejecutar pruebas ni pagos.
+- Límite: confirmar visualmente segundo acercamiento, regreso desde menú y acuse tardío en teléfonos. No se declara interoperabilidad ACR122U.
+- Impacto académico: separa entrega incierta, aceptación local y conciliación demostrada por resolución; corrección de presentación sin mover fondos.
+- Commit: `fix(nfc): [TFG-C13-AN-01] mostrar el resultado persistido al cliente`.

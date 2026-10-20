@@ -109,6 +109,16 @@ class TokenManager(context: Context) {
     fun peekPendingRequestId(kind: String, walletId: String): String? =
         sharedPreferences.getString("pending_request:$kind:$walletId", null)
 
+    fun getNfcOperationId(walletId: String): String? =
+        sharedPreferences.getString("nfc_ui_operation:$walletId", null)
+
+    fun setNfcOperationId(walletId: String, operationId: String?): Boolean {
+        val editor = sharedPreferences.edit()
+        val name = "nfc_ui_operation:$walletId"
+        if (operationId == null) editor.remove(name) else editor.putString(name, operationId)
+        return editor.commit()
+    }
+
     @Synchronized
     fun pendingRequestId(kind: String, walletId: String): String {
         val name = "pending_request:$kind:$walletId"

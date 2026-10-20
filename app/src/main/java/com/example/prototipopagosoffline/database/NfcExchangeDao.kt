@@ -17,6 +17,9 @@ interface NfcExchangeDao {
     @Query("SELECT * FROM nfc_exchanges WHERE operation_id = :operationId LIMIT 1")
     suspend fun getExchange(operationId: String): NfcExchange?
 
+    @Query("SELECT * FROM nfc_exchanges WHERE operation_id = :operationId AND wallet_id = :walletId LIMIT 1")
+    fun observeExchange(operationId: String, walletId: String): Flow<NfcExchange?>
+
     @Query("UPDATE nfc_exchanges SET state = 'REQUEST_EXPIRED' WHERE state = 'REQUEST_RECEIVED' AND receipt_envelope IS NULL AND request_expires_at_epoch_seconds IS NOT NULL AND request_expires_at_epoch_seconds <= :now")
     suspend fun expirePendingRequests(now: Long): Int
 
