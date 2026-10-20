@@ -619,3 +619,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Límites: compilación no acredita migración 16→17, cierre criptográfico, renovación, conciliación física ni preservación de datos en dispositivo. Queda validación manual/agrupada. Warnings Kotlin preexistentes visibles en MainActivity y OfflinePaymentCoordinator.
 - Commit: `fix(android): [TFG-C10-AN-01] separar sesión de renovación offline`.
 - Impacto académico: autenticación no depende de obtener cupo; el usuario puede renovar usando fondos libres y conserva respaldados los pagos emitidos pendientes.
+
+## TFG-C12-AN-03 — Recuperar acuses tardíos
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: una solicitud conocida quedaba rechazada por vencimiento al reenviar el acuse.
+- Alcance: reanudar solo comprobante idéntico persistido de la cuenta activa.
+- Commit: `fix(nfc): [TFG-C12-AN-03] reanudar acuses de solicitudes conocidas`.
+- Antes: vencimiento bloqueaba reanudación aunque ya hubiera comprobante. Ahora: solo solicitud idéntica firmada de cuenta activa y comprobante guardado atraviesa esa barrera; se devuelve estado persistido. Confirmar consulta la cuenta antes de devolver comprobante existente.
+- Archivos: `protocol/ClientPaymentExchangeService.kt`, `protocol/RoomNfcExchangeStore.kt`, `utils/OfflinePaymentCoordinator.kt`, este registro. NFC y QR/TCP usan el mismo servicio; no se alteran APDU ni firma. Verificación: compilación; pérdida física de acuse pendiente.

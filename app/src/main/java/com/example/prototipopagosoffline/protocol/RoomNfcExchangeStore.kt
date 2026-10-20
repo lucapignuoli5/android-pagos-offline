@@ -39,25 +39,28 @@ class RoomNfcExchangeStore(
             }
         }
 
-    override suspend fun getRequest(operationId: String): ByteArray? = dao.getExchange(operationId)?.requestEnvelope
+    private suspend fun owned(operationId: String): NfcExchange? =
+        dao.getExchange(operationId)?.takeIf { it.walletId != null && it.walletId == walletId() }
+
+    override suspend fun getRequest(operationId: String): ByteArray? = owned(operationId)?.requestEnvelope
 
     override suspend fun getState(operationId: String): ExchangeState? =
-        dao.getExchange(operationId)?.state?.let(ExchangeState::valueOf)
+        owned(operationId)?.state?.let(ExchangeState::valueOf)
 
-    override suspend fun getReceipt(operationId: String): ByteArray? = dao.getExchange(operationId)?.receiptEnvelope
+    override suspend fun getReceipt(operationId: String): ByteArray? = owned(operationId)?.receiptEnvelope
 
     override suspend fun getAuthorization(operationId: String): ByteArray? {
-        val authorizationId = dao.getExchange(operationId)?.authorizationId ?: return null
+        val authorizationId = owned(operationId)?.authorizationId ?: return null
         return database.authorizationDao().getAuthorization(authorizationId)?.authorizationEnvelope
     }
 
     override suspend fun markDeliveryStarted(operationId: String) {
-        dao.markDeliveryStarted(operationId)
+        if (owned(operationId) != null) dao.markDeliveryStarted(operationId)
     }
 
     override suspend fun saveAck(operationId: String, signedEnvelope: ByteArray): SaveResult =
         database.withTransaction {
-            val existing = dao.getExchange(operationId) ?: return@withTransaction SaveResult.CONFLICT
+            val existing = owned(operationId) ?: return@withTransaction SaveResult.CONFLICT
             when {
                 existing.ackEnvelope == null -> {
                     check(dao.setAck(operationId, signedEnvelope) == 1)

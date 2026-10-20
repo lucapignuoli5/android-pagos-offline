@@ -12,7 +12,6 @@ class ClientPaymentExchangeService(
     suspend fun acceptRequest(data: ByteArray): AcceptedLocalMessage {
         runCatching { ProtocolV3.parseSignedEnvelope(data) }.getOrNull()?.let { envelope ->
             require(ProtocolV3.validatePayload(envelope.payload) == MessageTypeV3.PAYMENT_REQUEST)
-            require(Instant.parse(envelope.payload["expires_at"].asString).isAfter(now()))
             val keyId = envelope.payload["pos_key_id"].asString
             val fingerprint = envelope.payload["pos_key_fingerprint"].asString
             val publicKey = trustedPosKeys.resolve(
@@ -25,14 +24,16 @@ class ClientPaymentExchangeService(
                 envelope.payload["terminal_id"].asString
             )) { "Firma POS v3 invalida" }
             val operationId = envelope.payload["operation_id"].asString
+            val previous = store.getRequest(operationId)
+            val knownReceipt = previous?.contentEquals(data) == true && store.getReceipt(operationId) != null
+            require(Instant.parse(envelope.payload["expires_at"].asString).isAfter(now()) || knownReceipt) {
+                "Solicitud vencida"
+            }
             require(store.saveRequest(operationId, data) != SaveResult.CONFLICT)
-            return AcceptedLocalMessage(operationId, ExchangeState.REQUEST_RECEIVED)
+            return AcceptedLocalMessage(operationId, store.getState(operationId) ?: ExchangeState.REQUEST_RECEIVED)
         }
         val envelope = ProtocolV2.parseSignedEnvelope(data)
         require(ProtocolV2.validatePayload(envelope.payload) == MessageType.PAYMENT_REQUEST)
-        require(Instant.parse(envelope.payload["expires_at"].asString).isAfter(now())) {
-            "Solicitud vencida"
-        }
         val publicKey = trustedPosKeys.resolve(
             envelope.payload["pos_key_id"].asString,
             envelope.payload["pos_key_fingerprint"].asString
@@ -42,10 +43,12 @@ class ClientPaymentExchangeService(
         require(store.getRequest(operationId)?.contentEquals(data) == true) {
             "Las solicitudes nuevas requieren v3; v2 solo recupera operaciones existentes"
         }
+        require(Instant.parse(envelope.payload["expires_at"].asString).isAfter(now()) ||
+                store.getReceipt(operationId) != null) { "Solicitud vencida" }
         require(store.saveRequest(operationId, data) != SaveResult.CONFLICT) {
             "operation_id repetido con otra solicitud"
         }
-        return AcceptedLocalMessage(operationId, ExchangeState.REQUEST_RECEIVED)
+        return AcceptedLocalMessage(operationId, store.getState(operationId) ?: ExchangeState.REQUEST_RECEIVED)
     }
 
     suspend fun acceptAck(data: ByteArray): AcceptedLocalMessage {
@@ -71,7 +74,7 @@ class ClientPaymentExchangeService(
             )
             ProtocolV3.validateAckBinding(request, receipt, envelope)
             require(store.saveAck(operationId, data) != SaveResult.CONFLICT)
-            return AcceptedLocalMessage(operationId, ExchangeState.LOCALLY_ACCEPTED)
+            return AcceptedLocalMessage(operationId, store.getState(operationId) ?: ExchangeState.LOCALLY_ACCEPTED)
         }
         val envelope = ProtocolV2.parseSignedEnvelope(data)
         require(ProtocolV2.validatePayload(envelope.payload) == MessageType.PAYMENT_ACK)
@@ -93,6 +96,6 @@ class ClientPaymentExchangeService(
         require(store.saveAck(operationId, data) != SaveResult.CONFLICT) {
             "Acuse distinto para la misma operacion"
         }
-        return AcceptedLocalMessage(operationId, ExchangeState.LOCALLY_ACCEPTED)
+        return AcceptedLocalMessage(operationId, store.getState(operationId) ?: ExchangeState.LOCALLY_ACCEPTED)
     }
 }

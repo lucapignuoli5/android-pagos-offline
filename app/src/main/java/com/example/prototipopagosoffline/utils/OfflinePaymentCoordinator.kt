@@ -23,9 +23,9 @@ class OfflinePaymentCoordinator(
     suspend fun confirm(operationId: String, walletId: String): ConfirmationResult {
         val exchange = database.nfcExchangeDao().getExchange(operationId)
             ?: throw IllegalArgumentException("Solicitud no encontrada")
+        require(exchange.walletId == walletId) { "Solicitud de otra cuenta" }
         exchange.receiptEnvelope?.let { return ConfirmationResult.AlreadyCreated(operationId, it) }
         require(exchange.state == ExchangeState.REQUEST_RECEIVED.name) { "Solicitud no disponible para confirmar" }
-        require(exchange.walletId == walletId) { "Solicitud de otra cuenta" }
         val requestV3 = runCatching { ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope) }.getOrNull()
         require(requestV3 != null) { "No se emiten comprobantes nuevos v2" }
         val request = requestV3?.payload ?: ProtocolV2.parseSignedEnvelope(exchange.requestEnvelope).payload
