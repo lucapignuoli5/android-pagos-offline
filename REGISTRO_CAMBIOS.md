@@ -671,3 +671,15 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Límite: confirmar visualmente segundo acercamiento, regreso desde menú y acuse tardío en teléfonos. No se declara interoperabilidad ACR122U.
 - Impacto académico: separa entrega incierta, aceptación local y conciliación demostrada por resolución; corrección de presentación sin mover fondos.
 - Commit: `fix(nfc): [TFG-C13-AN-01] mostrar el resultado persistido al cliente`.
+
+## TFG-C13-AN-02 — Preparación offline automática
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Solicitud: retirar «Cupo» y «Actualizar»; preparar/renovar autorizaciones automáticamente con Internet. Esta decisión reemplaza la renovación explícita acordada en C10–C12.
+- Alcance: integrar recuperación idempotente, conciliación y cierre conservador en el trabajo por cuenta; preservar respaldos de pagos emitidos y no renovar si el cierre requiere revisión.
+- Antes/ahora: renovación explícita desde Cupo y refrescos manuales en menú; ahora login/trabajo cliente y recarga activan mantenimiento por cuenta: conciliación, cierre de vencidas/agotadas y emisión sobre saldo libre. Se retiran Cupo/Actualizar/Sincronizar del menú. Presupuesto cero es espera normal; revisión/acceso requieren atención. Reintentos recuperan el mismo ID y cuerpo.
+- Decisión: mantener autorizaciones y límites firmados internos con preparación automática; no hacer que el saldo visual sustituya evidencia. Cierre con rechazo definitivo requiere resolución vinculada y contrapartida contable en TFG-C13-BE-01; nunca rehabilita índice ni libera pagos incompletos.
+- Archivos: `utils/OfflineProvisioner.kt`, `sync/SyncWorker.kt`, `utils/SimulatedTopupService.kt`, `sync/OfflineAuthorizationCloser.kt`, `MainActivity.kt`, `SINCRONIZACION_AUTOMATICA.md`, `AGENTS.md`, este registro. Sin cambio de esquema/rutas/payload firmado.
+- Verificación: revisión estática independiente del flujo de cierre/emisión, compilación APK e instrumentadas correctas; instrumentadas no ejecutadas. Sin tests, servicios, migraciones ni pagos.
+- Límites: requiere sesión e Internet/servidor; callback, trabajo durable y recuperación periódica están sujetos a demoras Android. Vencimientos y diez pagos conservan límites; no se promete renovación instantánea ni prevención total de doble gasto.
+- Impacto académico: sustituye la interacción explícita C10–C12 por mantenimiento transparente; evidencia funcional de esta versión queda pendiente.
+- Commit: `feat(sync): [TFG-C13-AN-02] renovar autorizaciones sin intervención manual`.

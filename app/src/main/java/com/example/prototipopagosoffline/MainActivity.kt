@@ -206,7 +206,6 @@ fun HomeScreen(
     var confirmedBalanceCents by remember { mutableStateOf<Long?>(null) }
     var reservedBalanceCents by remember { mutableStateOf(0L) }
     var syncPauseReason by remember { mutableStateOf<String?>(null) }
-    var preparingAuthorization by remember { mutableStateOf(false) }
 
     LaunchedEffect(role, walletId) {
         TokenManager(context).observeSyncPauseReason().collect { syncPauseReason = it }
@@ -394,85 +393,8 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 32.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                CleanActionButton(icon = Icons.Default.Sync, label = "Actualizar", onClick = {
-                    com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(
-                        context, retryEvidenceAttention = true)
-                    scope.launch(Dispatchers.IO) {
-                        try {
-                            val currentWalletId = walletId ?: error("Billetera no configurada")
-                            val response = RetrofitClient.apiService.getWalletBalance(currentWalletId)
-                            withContext(Dispatchers.Main) {
-                                if (response.isSuccessful && response.body() != null) {
-                                    Toast.makeText(context, "Saldo actualizado", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Error al obtener saldo", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            response.body()?.let { balance ->
-                                val db = AppDatabase.getInstance(context)
-                                db.walletDao().insertWallet(
-                                    com.example.prototipopagosoffline.database.OfflineWallet(
-                                        id = currentWalletId,
-                                        confirmedBalanceCents = balance.confirmed_balance_cents,
-                                        reservedBalanceCents = 0,
-                                        currency = balance.currency
-                                    )
-                                )
-                                db.walletDao().updateConfirmedBalance(
-                                    currentWalletId,
-                                    balance.confirmed_balance_cents,
-                                    balance.currency
-                                )
-                            }
-                        } catch (e: Exception) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "Error de red: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                })
                 CleanActionButton(icon = Icons.Default.Nfc, label = "Pagar NFC", onClick = onClientClick)
                 CleanActionButton(icon = Icons.Default.QrCodeScanner, label = "Pagar QR", onClick = onPagarQrClick)
-                CleanActionButton(
-                    icon = Icons.Default.Wallet,
-                    label = if (preparingAuthorization) "Preparando" else "Cupo",
-                    onClick = {
-                        if (!preparingAuthorization) {
-                            preparingAuthorization = true
-                            scope.launch(Dispatchers.IO) {
-                                try {
-                                val session = TokenManager(context)
-                                val token = session.getToken() ?: error("Volvé a ingresar para renovar el cupo")
-                                val currentWallet = session.getWalletId() ?: error("Billetera no configurada")
-                                val userId = session.getUserId() ?: error("Sesión incompleta; volvé a ingresar")
-                                val login = com.example.prototipopagosoffline.network.LoginResponse(
-                                    access_token = token,
-                                    token_type = "bearer",
-                                    user_id = userId,
-                                    wallet_id = currentWallet
-                                )
-                                com.example.prototipopagosoffline.utils.OfflineProvisioner(
-                                    AppDatabase.getInstance(context),
-                                    RetrofitClient.authenticatedApi(token),
-                                    requestStore = session
-                                ).renew(login)
-                                    com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, "Cupo offline preparado", Toast.LENGTH_SHORT).show()
-                                    }
-                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                    throw cancelled
-                                } catch (error: Exception) {
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(context, error.message ?: "No se pudo preparar el cupo", Toast.LENGTH_LONG).show()
-                                    }
-                                } finally {
-                                    withContext(Dispatchers.Main) { preparingAuthorization = false }
-                                }
-                            }
-                        }
-                    }
-                )
                 CleanActionButton(
                     icon = Icons.Default.Refresh,
                     label = "Cargar",
@@ -481,8 +403,9 @@ fun HomeScreen(
                             Toast.makeText(context, "Recarga simulada de $1.000", Toast.LENGTH_SHORT).show()
                             scope.launch(Dispatchers.IO) {
                                 try {
+                                    val token = TokenManager(context).getToken() ?: error("Volvé a ingresar")
                                     com.example.prototipopagosoffline.utils.SimulatedTopupService(
-                                        context, AppDatabase.getInstance(context), RetrofitClient.apiService
+                                        context, AppDatabase.getInstance(context), RetrofitClient.authenticatedApi(token)
                                     ).addDemoCredit()
                                     withContext(Dispatchers.Main) {
                                         Toast.makeText(context, "Recarga simulada acreditada", Toast.LENGTH_SHORT).show()
@@ -578,15 +501,6 @@ fun HomeScreen(
                         icon = Icons.Default.QrCode,
                         label = "Cobro QR",
                         onClick = onCobroQrClick
-                    )
-                    ActionButton(
-                        icon = Icons.Default.Sync,
-                        label = "Sincronizar",
-                        onClick = {
-                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(
-                                context, retryEvidenceAttention = true)
-                            Toast.makeText(context, "Sincronización programada", Toast.LENGTH_SHORT).show()
-                        }
                     )
                 }
             }
@@ -970,7 +884,7 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 isLoading = false
                                 val message = if (provisioningError == null) "Login exitoso"
-                                else "Sesión iniciada; el cupo queda pendiente: $provisioningError"
+                                else "Sesión iniciada; falta preparar los pagos sin Internet"
                                 android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                                 onRoleSelected(UserRole.CLIENTE)
                             }

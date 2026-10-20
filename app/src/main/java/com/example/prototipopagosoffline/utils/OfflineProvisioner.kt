@@ -17,8 +17,11 @@ import com.example.prototipopagosoffline.protocol.ProtocolV3
 import com.example.prototipopagosoffline.sync.AccountOperationLocks
 import com.example.prototipopagosoffline.sync.OfflineAuthorizationCloser
 import com.example.prototipopagosoffline.sync.V2SyncRepository
+import com.example.prototipopagosoffline.sync.SyncPauseRequired
+import com.example.prototipopagosoffline.sync.syncHttp
 import com.example.prototipopagosoffline.BuildConfig
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -35,48 +38,60 @@ class OfflineProvisioner(
     private val requestStore: TokenManager? = null
 ) {
     suspend fun provision(login: LoginResponse) = AccountOperationLocks.withLock("cliente", login.wallet_id) {
-        provisionLocked(login, allowIssuance = true, initialOnly = true)
+        maintainAfterSync(login)
     }
 
-    suspend fun renew(login: LoginResponse) = AccountOperationLocks.withLock("cliente", login.wallet_id) {
+    suspend fun renew(login: LoginResponse) = provision(login)
+
+    // SyncWorker already owns this account's mutex; do not acquire it recursively.
+    internal suspend fun maintainAfterSync(login: LoginResponse, synchronizeClosable: Boolean = true) {
+        requireActiveSession(login)
         val nowSeconds = now().epochSecond
         val closable = database.authorizationDao().getExplicitlyClosable(login.wallet_id, nowSeconds)
-        closable.forEach { authorization ->
+        if (synchronizeClosable) closable.forEach { authorization ->
             V2SyncRepository(database, api, now).syncAuthorization(authorization.id)
         }
         OfflineAuthorizationCloser(database, api, now = now).closeExpiredOrExhausted(login.wallet_id)
-        check(database.authorizationDao().getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
-            "Hay una autorizacion vencida o agotada que requiere recuperar o revisar sus comprobantes"
+        // A closure that cannot yet prove its manifest must keep its commitment.
+        // Other free funds can still be authorized; the server enforces that budget.
+        try {
+            provisionLocked(login)
+        } catch (_: AuthorizationBudgetUnavailable) {
+            // An empty budget is normal. Keep the stable attempt for a later top-up.
         }
-        provisionLocked(login, allowIssuance = true, initialOnly = false)
     }
 
-    private suspend fun provisionLocked(login: LoginResponse, allowIssuance: Boolean, initialOnly: Boolean) {
+    private fun requireActiveSession(login: LoginResponse) {
         require(login.wallet_id.isNotBlank())
         requestStore?.let { session ->
             require(session.getToken() == login.access_token
                     && session.getRole() == "cliente"
                     && session.getWalletId() == login.wallet_id
                     && session.getUserId() == login.user_id) {
-                "La sesion cambio; volve a ingresar antes de preparar el cupo"
+                "La sesion cambio; volve a ingresar"
             }
         }
+    }
+
+    private suspend fun provisionLocked(login: LoginResponse, recoveryPasses: Int = 2) {
+        requireActiveSession(login)
         val keyId = "wallet-key:${sha256(login.wallet_id).take(24)}"
         val key = paymentCoordinator.registerWalletKey(login.wallet_id, keyId)
         val proofBytes = buildKeyRegistrationProof(login, key, now(), registrationNonce())
-        val keyResponse = api.registerKey(
+        val keyResponse = syncHttp { api.registerKey(
             KeyRegistrationRequest(
                 public_key_b64 = key.publicKeyBase64,
                 proof_payload_b64 = Base64.getEncoder().encodeToString(proofBytes),
                 proof_signature_b64 = paymentCoordinator.signWithWalletKey(key.alias, proofBytes)
             )
-        )
+        ) } ?: throw java.io.IOException("Registro de clave temporalmente no disponible")
         require(keyResponse.isSuccessful) { "No se pudo registrar la clave de billetera" }
         val registered = requireNotNull(keyResponse.body()) { "Respuesta de clave vacia" }
         require(registered.key_id == key.keyId && registered.fingerprint == key.fingerprint)
         require(registered.scope_id == login.wallet_id && registered.purpose == "wallet")
 
-        val trustedPosResponse = api.getTrustedKeys("pos")
+        val trustedPosResponse = syncHttp { api.getTrustedKeys("pos") }
+            ?: throw java.io.IOException("Claves POS temporalmente no disponibles")
         require(trustedPosResponse.isSuccessful) { "No se pudieron actualizar las claves POS" }
         database.withTransaction {
             database.nfcExchangeDao().revokeInventory("pos")
@@ -96,25 +111,19 @@ class OfflineProvisioner(
 
         registerLegacyInventory(login.wallet_id)
 
-        val balanceResponse = api.getWalletBalance(login.wallet_id)
+        val balanceResponse = syncHttp { api.getWalletBalance(login.wallet_id) }
+            ?: throw java.io.IOException("Saldo temporalmente no disponible")
         require(balanceResponse.isSuccessful) { "No se pudo consultar el saldo" }
         val balance = requireNotNull(balanceResponse.body()) { "Respuesta de saldo vacia" }
         require(balance.wallet_id == login.wallet_id && balance.currency == ProtocolV2.CURRENCY)
         require(balance.confirmed_balance_cents >= 0)
 
-        val currentAuthorization = database.authorizationDao()
-            .findActiveForProvisioning(login.wallet_id, key.keyId, now().epochSecond)
+        saveWallet(balance.confirmed_balance_cents, login.wallet_id)
+        if (balance.review_required) throw SyncPauseRequired("ATTENTION_REQUIRED")
         val dao = database.authorizationDao()
         val pendingAttempt = dao.getIssuanceAttempt(login.wallet_id)
-        val localHistory = database.authorizationDao().hasV3AuthorizationHistory(login.wallet_id)
-        if (!allowIssuance || (initialOnly &&
-                    (currentAuthorization != null || localHistory || balance.has_authorization_history))) {
-            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
-            return
-        }
-
         val legacyRequestId = requestStore?.peekPendingRequestId("authorization", login.wallet_id)
-        if (!initialOnly && legacyRequestId != null && legacyRequestId != pendingAttempt?.requestId) {
+        if (legacyRequestId != null && legacyRequestId != pendingAttempt?.requestId) {
             val historicalAttempt = AuthorizationIssuanceAttempt(
                 walletId = login.wallet_id,
                 requestId = legacyRequestId,
@@ -126,20 +135,23 @@ class OfflineProvisioner(
             val recovered = issueAttempt(login, key, balance.confirmed_balance_cents,
                 historicalAttempt, completeRoomAttempt = false)
             requestStore?.completeRequest("authorization", login.wallet_id)
-            if (recovered.expiresAtEpochSeconds <= now().epochSecond) {
+            if (recovered.expiresAtEpochSeconds <= now().epochSecond ||
+                recovered.remainingAmountCents <= 0 || recovered.remainingPayments <= 0) {
                 OfflineAuthorizationCloser(database, api, now = now)
                     .closeExpiredOrExhausted(login.wallet_id)
-                check(dao.getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
-                    "La autorizacion historica vencida requiere revision"
-                }
-            } else return
-        }
-
-        if (!initialOnly && currentAuthorization != null && pendingAttempt == null && legacyRequestId == null) {
-            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
+            }
+            // Re-read the budget after recovery; bound recovery passes so a bad
+            // clock or a stale server response cannot create an emission loop.
+            if (recoveryPasses > 0) provisionLocked(login, recoveryPasses - 1)
             return
         }
 
+        if (balance.available_for_authorization_cents <= 0 &&
+            (pendingAttempt == null || pendingAttempt.lastResultCode == "AUTHORIZATION_BUDGET_UNAVAILABLE")) {
+            return
+        }
+
+        requireActiveSession(login)
         val attempt = database.withTransaction {
             val existing = dao.getIssuanceAttempt(login.wallet_id)
             if (existing != null) {
@@ -168,26 +180,10 @@ class OfflineProvisioner(
             requestStore?.completeRequest("authorization", login.wallet_id)
         }
         if (issued.expiresAtEpochSeconds <= now().epochSecond) {
-            check(!initialOnly) { "La autorizacion recuperada ya vencio; renovala desde Cupo" }
             OfflineAuthorizationCloser(database, api, now = now)
                 .closeExpiredOrExhausted(login.wallet_id)
-            check(dao.getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
-                "La autorizacion recuperada ya vencio y requiere revision"
-            }
-            val replacement = AuthorizationIssuanceAttempt(
-                walletId = login.wallet_id,
-                requestId = UUID.randomUUID().toString(),
-                walletKeyId = key.keyId,
-                maxPaymentCents = ProtocolV2.MAX_AMOUNT_CENTS,
-                maxPayments = 10,
-                createdAtEpochSeconds = now().epochSecond
-            )
-            dao.insertIssuanceAttempt(replacement)
-            val fresh = issueAttempt(login, key, balance.confirmed_balance_cents,
-                replacement, completeRoomAttempt = true)
-            check(fresh.expiresAtEpochSeconds > now().epochSecond) {
-                "El servidor devolvio otra autorizacion vencida; revisa el reloj"
-            }
+            if (recoveryPasses > 0) provisionLocked(login, recoveryPasses - 1)
+            return
         }
     }
 
@@ -210,11 +206,20 @@ class OfflineProvisioner(
             max_payments = attempt.maxPayments
         )
         if (completeRoomAttempt) check(dao.markIssuanceSent(login.wallet_id, attempt.requestId) == 1)
+        requireActiveSession(login)
         val authorizationResponse = api.createOfflineAuthorizationV3(issuanceRequest)
         if (!authorizationResponse.isSuccessful) {
+            val serverCode = if (authorizationResponse.code() == 409) runCatching {
+                JsonParser.parseString(authorizationResponse.errorBody()?.string().orEmpty())
+                    .asJsonObject.getAsJsonObject("detail")?.get("code")?.asString
+            }.getOrNull() else null
             if (completeRoomAttempt) dao.recordIssuanceResult(
-                login.wallet_id, attempt.requestId, "HTTP_${authorizationResponse.code()}"
+                login.wallet_id, attempt.requestId, serverCode ?: "HTTP_${authorizationResponse.code()}"
             )
+            if (serverCode == "AUTHORIZATION_BUDGET_UNAVAILABLE") throw AuthorizationBudgetUnavailable()
+            if (authorizationResponse.code() in setOf(401, 403)) throw SyncPauseRequired("REAUTH_REQUIRED")
+            if (authorizationResponse.code() in setOf(400, 404, 409, 410, 413, 415, 422))
+                throw SyncPauseRequired("ATTENTION_REQUIRED")
             error(when (authorizationResponse.code()) {
                 409 -> "No hay cupo libre para una nueva autorizacion; los pagos pendientes siguen reservados"
                 401, 403 -> "La sesion requiere volver a ingresar"
@@ -291,7 +296,8 @@ class OfflineProvisioner(
                     receipt_digest = ProtocolV2.payloadDigest(receipt.payload)
                 )
             }
-            val response = api.registerLegacyInventory(LegacyInventoryRequest(walletId, entries))
+            val response = syncHttp { api.registerLegacyInventory(LegacyInventoryRequest(walletId, entries)) }
+                ?: throw java.io.IOException("Inventario historico temporalmente no disponible")
             require(response.isSuccessful && response.body()?.total == entries.size) {
                 "No se pudo registrar el inventario historico v2"
             }
@@ -311,6 +317,8 @@ class OfflineProvisioner(
         .joinToString("") { "%02x".format(it) }
 
 }
+
+private class AuthorizationBudgetUnavailable : Exception()
 
 internal fun buildKeyRegistrationProof(
     login: LoginResponse,

@@ -6,6 +6,8 @@ import androidx.work.WorkerParameters
 import com.example.prototipopagosoffline.database.AppDatabase
 import com.example.prototipopagosoffline.network.RetrofitClient
 import com.example.prototipopagosoffline.utils.TokenManager
+import com.example.prototipopagosoffline.utils.OfflineProvisioner
+import com.example.prototipopagosoffline.network.LoginResponse
 import java.time.Instant
 import android.util.Log
 import androidx.room.withTransaction
@@ -48,7 +50,11 @@ class SyncWorker(
             val run = when (role) {
                 "cliente" -> {
                     val result = V2SyncRepository(database, api).syncDue(accountId)
-                    OfflineAuthorizationCloser(database, api).closeExpired(accountId)
+                    val userId = tokenManager.getUserId() ?: return Result.success()
+                    OfflineProvisioner(database, api, requestStore = tokenManager).maintainAfterSync(
+                        LoginResponse(token, "bearer", user_id = userId, wallet_id = accountId),
+                        synchronizeClosable = false
+                    )
                     result
                 }
                 "comercio" -> {

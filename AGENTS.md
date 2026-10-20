@@ -90,3 +90,11 @@ de código de forma incidental. Sin pruebas, compilación, instalación ni push.
 - La renovación explícita puede cerrar una autorización vencida o agotada; el trabajo automático conserva el criterio de vencimiento. Un ID de solicitud guardado antes de Room 17 se recupera sin generar otro al iniciar sesión con historial.
 - Solicitudes nuevas vencidas siguen rechazadas; una solicitud exacta de la cuenta activa con comprobante ya persistido puede reanudar la entrega del acuse sin consumir otro índice.
 - No desinstalar, borrar datos ni instalar un APK anterior para resolver errores de migración. Room 17→18 es aditiva, pero no fue ejecutada sobre bases de usuario durante esta implementación.
+
+## Automatización y actividad C13 — 20/10/2026
+
+- Por solicitud del usuario, C13 reemplaza la renovación explícita de C10–C12: login, trabajo por cuenta y recarga preparan autorizaciones con Internet y saldo libre, reutilizando solicitudes durables. Se retiran «Cupo», «Actualizar» y «Sincronizar» del menú. Los límites firmados se conservan; Android puede demorar background y sin servidor no renueva.
+- Conciliar precede al cierre de vencidas/agotadas y a nuevas emisiones. El cierre conserva pagos pendientes; REJECTED entra en el manifiesto solo con resolución firmada vinculada y liberación contable demostrada en backend. No se reutilizan índices ni se libera por timeout.
+- La pantalla NFC observa la operación por billetera y conserva su selección por cuenta para reanudar; acuse persistido permite aceptación local, resolución final permite conciliación. Rechazo/revisión prevalecen sobre el acuse. La selección de pantalla no es estado contable.
+- Actividad consulta Room por billetera o comercio/terminal comprobado, muestra estados y detalles, y permite desplazarse. Filas heredadas sin propietario siguen excluidas de la actividad personal. No usa PaymentState como fuente ni suma pendientes al saldo.
+- No se ejecutan pruebas, servicios, pagos ni migraciones en esta unidad. Registrar compilación y revisión estática por separado; la nueva automatización e interfaz requieren validación manual.

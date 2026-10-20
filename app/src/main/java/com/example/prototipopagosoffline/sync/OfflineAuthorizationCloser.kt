@@ -6,6 +6,7 @@ import com.example.prototipopagosoffline.database.LocalOfflineAuthorization
 import com.example.prototipopagosoffline.network.ApiService
 import com.example.prototipopagosoffline.network.OfflineAuthorizationCloseRequest
 import com.example.prototipopagosoffline.protocol.ProtocolV3
+import com.example.prototipopagosoffline.protocol.IssuerTrust
 import com.example.prototipopagosoffline.utils.WalletKeyManager
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -60,8 +61,9 @@ class OfflineAuthorizationCloser(
             val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
             val operations = database.nfcExchangeDao().getByAuthorization(stored.id)
             if (operations.any {
-                    it.state !in setOf("SYNCED", "RESERVED", "DELIVERY_UNCERTAIN", "LOCALLY_ACCEPTED")
-                            || (!it.serverEvidenceStored && it.state != "SYNCED")
+                    it.state !in setOf("SYNCED", "REJECTED", "RESERVED", "DELIVERY_UNCERTAIN", "LOCALLY_ACCEPTED")
+                            || (!it.serverEvidenceStored && it.state !in setOf("SYNCED", "REJECTED"))
+                            || (it.state == "REJECTED" && it.resolutionEnvelope == null)
                 }) return@withTransaction null
             val receipts = operations.map { exchange ->
                 val request = ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope)
@@ -70,6 +72,25 @@ class OfflineAuthorizationCloser(
                 require(receipt.payload["operation_id"].asString == exchange.operationId)
                 require(receipt.payload["wallet_id"].asString == stored.walletId)
                 require(receipt.payload["offline_authorization_id"].asString == stored.id)
+                if (exchange.state == "REJECTED") {
+                    // A rejected receipt still consumed its permanent index.
+                    // Only an issuer-signed final result proves its disposition.
+                    val resolution = ProtocolV3.parseSignedEnvelope(requireNotNull(exchange.resolutionEnvelope))
+                    val result = resolution.payload
+                    require(result["type"].asString == "payment_resolution")
+                    require(resolution.verify(IssuerTrust.publicKey(result)))
+                    require(result["operation_status"].asString == "REJECTED")
+                    require(result["operation_id"].asString == exchange.operationId)
+                    require(result["wallet_id"].asString == stored.walletId)
+                    require(result["offline_authorization_id"].asString == stored.id)
+                    require(result["merchant_id"].asString == request.payload["merchant_id"].asString)
+                    require(result["terminal_id"].asString == request.payload["terminal_id"].asString)
+                    require(result["amount_cents"].asLong == receipt.payload["amount_cents"].asLong)
+                    require(result["currency"].asString == ProtocolV3.CURRENCY)
+                    require(result["request_digest"].asString == ProtocolV3.payloadDigest(request))
+                    require(result["receipt_digest"].asString == ProtocolV3.payloadDigest(receipt))
+                    require(result["authorization_digest"].asString == ProtocolV3.payloadDigest(grant))
+                }
                 receipt
             }.sortedBy { it.payload["issuance_index"].asInt }
             if (receipts.map { it.payload["issuance_index"].asInt } != (1..receipts.size).toList()) {
