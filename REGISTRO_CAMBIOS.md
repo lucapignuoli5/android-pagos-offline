@@ -643,3 +643,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: `fix(cupo): [TFG-C12-AN-01] recuperar solicitudes previas a Room 17`.
 - Antes: se generaba otro UUID al migrar. Ahora: «Cupo» lee el ID previo sin crearlo, lo prioriza frente a otro intento Room y limpia preferencias solo tras guardar un grant firmado; si está vencido, intenta cerrarlo y emitir uno nuevo. Login con historial no emite grants.
 - Archivos: `utils/TokenManager.kt`, `utils/OfflineProvisioner.kt`, este registro. Contrato: mismo POST v3 y parámetros históricos 100000 centavos/10 pagos. Verificación: compilación; recuperación sobre una instalación previa pendiente.
+
+## TFG-C12-CO-01 — Respetar resoluciones financieras finales
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: los sincronizadores priorizaban el conflicto de envío aun con resolución financiera final válida.
+- Alcance: verificar resolución vinculada antes de clasificar el envío.
+- Commit: `fix(conciliacion): [TFG-C12-CO-01] respetar resoluciones finales firmadas`.
+- Antes: CONFLICT de envío tapaba ACCEPTED/REJECTED. Ahora: la resolución vinculada y firmada decide el estado financiero; su código firmado prevalece. No se altera el contrato HTTP.
+- Archivos: `sync/V2SyncRepository.kt`, `sync/MobilePosSyncRepository.kt`, este registro. Verificación: compilación APK e instrumentadas; no se ejecutaron pruebas ni pagos. Falta comprobar con un reenvío contradictorio real.

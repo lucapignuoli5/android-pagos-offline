@@ -224,25 +224,32 @@ class V2SyncRepository(
             exchange != null && verifyResolution(result, exchange)
         } else true
         val status = when {
+            result.final && result.operation_status in setOf("ACCEPTED", "REJECTED") ->
+                if (finalResolutionValid) result.operation_status else "RETRYABLE_ERROR"
             result.submission_status == "CONFLICT" -> "CONFLICT"
             result.submission_status == "INVALID_EVIDENCE" -> "CONFLICT"
             result.submission_status == "RETRYABLE_ERROR" -> "RETRYABLE_ERROR"
-            result.final && !finalResolutionValid -> "RETRYABLE_ERROR"
-            result.operation_status == "ACCEPTED" && result.final -> "ACCEPTED"
-            result.operation_status == "REJECTED" && result.final -> "REJECTED"
             result.operation_status == "PENDING_REVIEW" -> "CONFLICT"
             else -> "PENDING_EVIDENCE"
         }
-        val code = if (result.final && !finalResolutionValid) "INVALID_SIGNED_RESOLUTION" else result.code
-        val evidenceStored = result.submission_status == "VALIDATED"
-                && result.operation_status in setOf("PENDING_EVIDENCE", "ACCEPTED", "REJECTED")
+        val code = when {
+            result.final && !finalResolutionValid -> "INVALID_SIGNED_RESOLUTION"
+            status in setOf("ACCEPTED", "REJECTED") -> ProtocolV3.parseSignedEnvelope(
+                Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+            ).payload["code"].asString
+            else -> result.code
+        }
+        val evidenceStored = status in setOf("ACCEPTED", "REJECTED") ||
+                (result.submission_status == "VALIDATED"
+                && result.operation_status == "PENDING_EVIDENCE")
         val resolution = if (status in setOf("ACCEPTED", "REJECTED")) {
             Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
         } else null
         return OfflinePaymentResultV2(result.operation_id, status, code, evidenceStored, resolution)
     }
 
-    private fun verifyResolution(result: OfflinePaymentResultV3, exchange: NfcExchange): Boolean = runCatching {
+    private fun verifyResolution(result: OfflinePaymentResultV3, exchange: NfcExchange,
+                                 authorization: ByteArray? = null): Boolean = runCatching {
         val wire = Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
         val resolution = ProtocolV3.parseSignedEnvelope(wire)
         require(ProtocolV3.validatePayload(resolution.payload) == MessageTypeV3.PAYMENT_RESOLUTION)

@@ -96,16 +96,22 @@ class MobilePosSyncRepository(
             operation != null && verifyResolution(result, operation)
         } else true
         val status = when {
+            result.final && result.operation_status in setOf("ACCEPTED", "REJECTED") ->
+                if (finalValid) result.operation_status else "RETRYABLE_ERROR"
             result.submission_status in setOf("CONFLICT", "INVALID_EVIDENCE") -> "CONFLICT"
             result.submission_status == "RETRYABLE_ERROR" -> "RETRYABLE_ERROR"
-            result.final && !finalValid -> "RETRYABLE_ERROR"
-            result.final && result.operation_status in setOf("ACCEPTED", "REJECTED") -> result.operation_status
             result.operation_status == "PENDING_REVIEW" -> "CONFLICT"
             else -> "PENDING_EVIDENCE"
         }
+        val resolution = if (status in setOf("ACCEPTED", "REJECTED")) {
+            Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+        } else null
+        val code = if (resolution != null) {
+            ProtocolV3.parseSignedEnvelope(resolution).payload["code"].asString
+        } else if (result.final && !finalValid) "INVALID_SIGNED_RESOLUTION" else result.code
         return OfflinePaymentResultV2(
-            result.operation_id, status,
-            if (result.final && !finalValid) "INVALID_SIGNED_RESOLUTION" else result.code
+            result.operation_id, status, code,
+            resolutionEnvelope = resolution
         )
     }
 
