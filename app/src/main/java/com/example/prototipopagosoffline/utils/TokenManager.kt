@@ -106,6 +106,10 @@ class TokenManager(context: Context) {
     }
 
     @Synchronized
+    fun peekPendingRequestId(kind: String, walletId: String): String? =
+        sharedPreferences.getString("pending_request:$kind:$walletId", null)
+
+    @Synchronized
     fun pendingRequestId(kind: String, walletId: String): String {
         val name = "pending_request:$kind:$walletId"
         sharedPreferences.getString(name, null)?.let { return it }

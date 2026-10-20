@@ -106,20 +106,40 @@ class OfflineProvisioner(
             .findActiveForProvisioning(login.wallet_id, key.keyId, now().epochSecond)
         val dao = database.authorizationDao()
         val pendingAttempt = dao.getIssuanceAttempt(login.wallet_id)
-        if (initialOnly && currentAuthorization != null && pendingAttempt == null) {
-            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
-            return
-        }
         val localHistory = database.authorizationDao().hasV3AuthorizationHistory(login.wallet_id)
-        if (!allowIssuance || (initialOnly && pendingAttempt == null
-                    && (localHistory || balance.has_authorization_history))) {
+        if (!allowIssuance || (initialOnly &&
+                    (currentAuthorization != null || localHistory || balance.has_authorization_history))) {
             saveWallet(balance.confirmed_balance_cents, login.wallet_id)
             return
         }
 
-        require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank()) {
-            "Confianza del emisor v3 no configurada"
+        val legacyRequestId = requestStore?.peekPendingRequestId("authorization", login.wallet_id)
+        if (!initialOnly && legacyRequestId != null && legacyRequestId != pendingAttempt?.requestId) {
+            val historicalAttempt = AuthorizationIssuanceAttempt(
+                walletId = login.wallet_id,
+                requestId = legacyRequestId,
+                walletKeyId = key.keyId,
+                maxPaymentCents = 100_000L,
+                maxPayments = 10,
+                createdAtEpochSeconds = now().epochSecond
+            )
+            val recovered = issueAttempt(login, key, balance.confirmed_balance_cents,
+                historicalAttempt, completeRoomAttempt = false)
+            requestStore?.completeRequest("authorization", login.wallet_id)
+            if (recovered.expiresAtEpochSeconds <= now().epochSecond) {
+                OfflineAuthorizationCloser(database, api, now = now)
+                    .closeExpiredOrExhausted(login.wallet_id)
+                check(dao.getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
+                    "La autorizacion historica vencida requiere revision"
+                }
+            } else return
         }
+
+        if (!initialOnly && currentAuthorization != null && pendingAttempt == null && legacyRequestId == null) {
+            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
+            return
+        }
+
         val attempt = database.withTransaction {
             val existing = dao.getIssuanceAttempt(login.wallet_id)
             if (existing != null) {
@@ -142,6 +162,46 @@ class OfflineProvisioner(
                 created
             }
         }
+        val issued = issueAttempt(login, key, balance.confirmed_balance_cents,
+            attempt, completeRoomAttempt = true)
+        if (legacyRequestId == attempt.requestId) {
+            requestStore?.completeRequest("authorization", login.wallet_id)
+        }
+        if (issued.expiresAtEpochSeconds <= now().epochSecond) {
+            check(!initialOnly) { "La autorizacion recuperada ya vencio; renovala desde Cupo" }
+            OfflineAuthorizationCloser(database, api, now = now)
+                .closeExpiredOrExhausted(login.wallet_id)
+            check(dao.getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
+                "La autorizacion recuperada ya vencio y requiere revision"
+            }
+            val replacement = AuthorizationIssuanceAttempt(
+                walletId = login.wallet_id,
+                requestId = UUID.randomUUID().toString(),
+                walletKeyId = key.keyId,
+                maxPaymentCents = ProtocolV2.MAX_AMOUNT_CENTS,
+                maxPayments = 10,
+                createdAtEpochSeconds = now().epochSecond
+            )
+            dao.insertIssuanceAttempt(replacement)
+            val fresh = issueAttempt(login, key, balance.confirmed_balance_cents,
+                replacement, completeRoomAttempt = true)
+            check(fresh.expiresAtEpochSeconds > now().epochSecond) {
+                "El servidor devolvio otra autorizacion vencida; revisa el reloj"
+            }
+        }
+    }
+
+    private suspend fun issueAttempt(
+        login: LoginResponse,
+        key: WalletKeyMaterial,
+        confirmedBalance: Long,
+        attempt: AuthorizationIssuanceAttempt,
+        completeRoomAttempt: Boolean
+    ): LocalOfflineAuthorization {
+        require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank()) {
+            "Confianza del emisor v3 no configurada"
+        }
+        val dao = database.authorizationDao()
         val issuanceRequest = OfflineAuthorizationRequest(
             request_id = attempt.requestId,
             wallet_id = attempt.walletId,
@@ -149,10 +209,12 @@ class OfflineProvisioner(
             max_payment_cents = attempt.maxPaymentCents,
             max_payments = attempt.maxPayments
         )
-        check(dao.markIssuanceSent(login.wallet_id, attempt.requestId) == 1)
+        if (completeRoomAttempt) check(dao.markIssuanceSent(login.wallet_id, attempt.requestId) == 1)
         val authorizationResponse = api.createOfflineAuthorizationV3(issuanceRequest)
         if (!authorizationResponse.isSuccessful) {
-            dao.recordIssuanceResult(login.wallet_id, attempt.requestId, "HTTP_${authorizationResponse.code()}")
+            if (completeRoomAttempt) dao.recordIssuanceResult(
+                login.wallet_id, attempt.requestId, "HTTP_${authorizationResponse.code()}"
+            )
             error(when (authorizationResponse.code()) {
                 409 -> "No hay cupo libre para una nueva autorizacion; los pagos pendientes siguen reservados"
                 401, 403 -> "La sesion requiere volver a ingresar"
@@ -179,7 +241,7 @@ class OfflineProvisioner(
         require(Instant.parse(payload["spend_expires_at"].asString).epochSecond == Instant.parse(authorization.spend_expires_at).epochSecond)
 
         database.withTransaction {
-            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
+            saveWallet(confirmedBalance, login.wallet_id)
             val stored = dao.getAuthorization(authorization.authorization_id)
             if (stored != null) {
                 check(stored.authorizationEnvelope?.contentEquals(grantBytes) == true) {
@@ -198,8 +260,9 @@ class OfflineProvisioner(
                     authorizationEnvelope = grantBytes
                 )
             )
-            check(dao.completeIssuanceAttempt(login.wallet_id, attempt.requestId) == 1)
+            if (completeRoomAttempt) check(dao.completeIssuanceAttempt(login.wallet_id, attempt.requestId) == 1)
         }
+        return requireNotNull(dao.getAuthorization(authorization.authorization_id))
     }
 
     private suspend fun saveWallet(confirmedBalance: Long, walletId: String) {

@@ -635,3 +635,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: `fix(cupo): [TFG-C12-AN-02] cerrar autorizaciones agotadas`.
 - Antes: solo se cerraba al vencer. Ahora: la acción explícita «Cupo» incluye autorizaciones sin índices o importe disponible, sincroniza comprobantes y reutiliza el manifiesto congelado; WorkManager sigue cerrando solo por vencimiento.
 - Archivos: `database/AuthorizationDao.kt`, `sync/OfflineAuthorizationCloser.kt`, `utils/OfflineProvisioner.kt`, este registro. Sin cambio de base ni sobre firmado. Verificación: compilación; pendiente diez pagos pequeños y reserva sin acuse.
+
+## TFG-C12-AN-01 — Recuperar solicitud de autorización anterior
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: al migrar a Room 17 se olvidaba el ID pendiente de preferencias cifradas.
+- Alcance: conservar ID histórico, recuperarlo explícitamente y persistir el grant antes de limpiarlo.
+- Commit: `fix(cupo): [TFG-C12-AN-01] recuperar solicitudes previas a Room 17`.
+- Antes: se generaba otro UUID al migrar. Ahora: «Cupo» lee el ID previo sin crearlo, lo prioriza frente a otro intento Room y limpia preferencias solo tras guardar un grant firmado; si está vencido, intenta cerrarlo y emitir uno nuevo. Login con historial no emite grants.
+- Archivos: `utils/TokenManager.kt`, `utils/OfflineProvisioner.kt`, este registro. Contrato: mismo POST v3 y parámetros históricos 100000 centavos/10 pagos. Verificación: compilación; recuperación sobre una instalación previa pendiente.
