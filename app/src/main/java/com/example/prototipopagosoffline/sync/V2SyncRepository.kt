@@ -28,7 +28,50 @@ class V2SyncRepository(
         require(walletId.isNotBlank())
         val instant = now().epochSecond
         val candidates = database.nfcExchangeDao().getSyncCandidates(walletId, instant, limit)
-        return syncSelected(walletId, candidates, instant)
+        val ordinary = syncSelected(walletId, candidates, instant)
+        val recovered = recoverFinalResolutions(walletId, instant, limit.coerceIn(1, 100))
+        val next = database.nfcExchangeDao().getNextResolutionRecoveryAt(walletId)
+        return SyncRun(ordinary.processed + recovered,
+            listOfNotNull(ordinary.nextSyncAtEpochSeconds, next).minOrNull())
+    }
+
+    private suspend fun recoverFinalResolutions(walletId: String, instant: Long, limit: Int): Int {
+        val dao = database.nfcExchangeDao()
+        var recovered = 0
+        for (exchange in dao.getResolutionRecoveryCandidates(walletId, instant, limit)) {
+            val response = try {
+                api.getOfflinePaymentV3(exchange.operationId)
+            } catch (_: java.io.IOException) {
+                null
+            }
+            when {
+                response == null || response.code() >= 500 || response.code() in setOf(408, 429) -> {
+                    val delay = minOf(15L * (1L shl minOf(exchange.syncAttempts, 8)), 3600L)
+                    dao.retryResolutionRecovery(exchange.operationId, instant + delay)
+                }
+                response.code() in setOf(401, 403) -> throw SyncPauseRequired("REAUTH_REQUIRED")
+                !response.isSuccessful -> dao.flagResolutionRecovery(exchange.operationId)
+                else -> {
+                    val result = response.body()
+                    val expected = if (exchange.state == "SYNCED") "ACCEPTED" else "REJECTED"
+                    val authorization = exchange.authorizationId?.let {
+                        database.authorizationDao().getAuthorization(it)?.authorizationEnvelope
+                    }
+                    if (result == null || result.operation_id != exchange.operationId || !result.final ||
+                        result.operation_status != expected || authorization == null ||
+                        !verifyResolution(result, exchange, authorization)) {
+                        dao.flagResolutionRecovery(exchange.operationId)
+                    } else {
+                        val wire = Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+                        database.withTransaction {
+                            check(dao.attachFinalResolution(exchange.operationId, wire) == 1)
+                        }
+                        recovered++
+                    }
+                }
+            }
+        }
+        return recovered
     }
 
     suspend fun syncAuthorization(authorizationId: String): SyncRun {
@@ -262,10 +305,13 @@ class V2SyncRepository(
         require(resolution.payload["merchant_id"].asString == exchange.merchantId)
         require(resolution.payload["terminal_id"].asString == exchange.terminalId)
         require(resolution.payload["amount_cents"].asLong == exchange.amountCents)
+        require(resolution.payload["currency"].asString == "ARS")
         require(resolution.payload["offline_authorization_id"].asString == exchange.authorizationId)
         require(resolution.payload["request_digest"].asString == ProtocolV3.payloadDigest(request))
         require(resolution.payload["receipt_digest"].asString == ProtocolV3.payloadDigest(receipt))
         require(resolution.payload["authorization_digest"].asString == receipt.payload["authorization_digest"].asString)
+        if (authorization != null) require(resolution.payload["authorization_digest"].asString ==
+            ProtocolV3.payloadDigest(ProtocolV3.parseSignedEnvelope(authorization)))
         require(resolution.payload["operation_status"].asString == result.operation_status)
         true
     }.getOrDefault(false)

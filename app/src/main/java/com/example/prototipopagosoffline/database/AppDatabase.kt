@@ -20,7 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -50,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                 .build().also { instance = it }
             }
         }
@@ -157,6 +157,15 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN resolution_envelope BLOB")
                 db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_payload BLOB")
                 db.execSQL("CREATE TABLE IF NOT EXISTS authorization_issuance_attempts (wallet_id TEXT NOT NULL PRIMARY KEY, request_id TEXT NOT NULL, wallet_key_id TEXT NOT NULL, max_payment_cents INTEGER NOT NULL, max_payments INTEGER NOT NULL, state TEXT NOT NULL, last_result_code TEXT, created_at_epoch_seconds INTEGER NOT NULL)")
+            }
+        }
+
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN resolution_recovery_status TEXT NOT NULL DEFAULT 'PENDING'")
+                db.execSQL("UPDATE nfc_exchanges SET resolution_recovery_status = 'COMPLETE' WHERE resolution_envelope IS NOT NULL")
+                db.execSQL("ALTER TABLE mobile_pos_operations ADD COLUMN resolution_envelope BLOB")
+                db.execSQL("ALTER TABLE mobile_pos_operations ADD COLUMN resolution_recovery_status TEXT NOT NULL DEFAULT 'PENDING'")
             }
         }
     }

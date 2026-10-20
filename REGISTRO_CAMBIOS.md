@@ -651,3 +651,12 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: `fix(conciliacion): [TFG-C12-CO-01] respetar resoluciones finales firmadas`.
 - Antes: CONFLICT de envío tapaba ACCEPTED/REJECTED. Ahora: la resolución vinculada y firmada decide el estado financiero; su código firmado prevalece. No se altera el contrato HTTP.
 - Archivos: `sync/V2SyncRepository.kt`, `sync/MobilePosSyncRepository.kt`, este registro. Verificación: compilación APK e instrumentadas; no se ejecutaron pruebas ni pagos. Falta comprobar con un reenvío contradictorio real.
+
+## TFG-C12-CO-02 — Conservar y recuperar resoluciones finales
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: comercio móvil perdía la prueba firmada; pagos históricos finales podían carecer de ella.
+- Alcance: migración aditiva Room 17→18, persistencia atómica de resolución y consulta de evidencia histórica sin repetir movimientos.
+- Commit: `fix(evidencia): [TFG-C12-CO-02] recuperar resoluciones finales sin mover saldos`.
+- Antes: comercio móvil no guardaba prueba final y finales antiguos no la recuperaban. Ahora: Room 17→18 añade resolución y estado PENDING/COMPLETE/ATTENTION_REQUIRED; comercio la guarda junto al final. Cliente/comercio consultan GET v3 para adjuntar solo evidencia verificada a finales sin blob, hasta 100 por cuenta/terminal. 404 o prueba inválida requieren atención individual; errores transitorios reintentan. «Actualizar/Sincronizar» permite reintento explícito.
+- Archivos: `database/AppDatabase.kt`, entidades/DAO de intercambios y comercio, schema `18.json`, `network/ApiService.kt`, `sync/V2SyncRepository.kt`, `sync/MobilePosSyncRepository.kt`, `sync/SyncManager.kt`, `sync/SyncWorker.kt`, `MainActivity.kt`, `AGENTS.md`, este registro.
+- Verificación: `assembleDebug` y `assembleDebugAndroidTest` completaron; instrumentadas no ejecutadas. Room 17→18 en datos existentes y recuperación histórica siguen pendientes. No desinstalar ni degradar APK como método de recuperación.

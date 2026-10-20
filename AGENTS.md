@@ -14,7 +14,7 @@ Leer `../../AGENTS.md` y este archivo antes de trabajar. Esta carpeta es un repo
 ## Contrato y datos actuales
 
 - Pagos nuevos: v3. V2 se conserva exclusivamente para recuperación/conciliación histórica controlada; no volver a firmar evidencia antigua.
-- Room 16; migraciones declaradas 5→16 y schemas exportados. Su presencia/compilación no acredita migración ejecutada sobre todas las bases históricas.
+- Room 18; migraciones declaradas 5→18 y schemas exportados. Su presencia/compilación no acredita migración ejecutada sobre todas las bases históricas.
 - Reserva, autorización, índice, comprobante y estado deben persistirse antes del transporte. Conservar reserva ante entrega incierta, conflictos o evidencia incompleta; no liberar por vencimiento o error de red.
 - NFC conserva AID, capacidades SELECT y GET_AUTHORIZATION 0x50. SELECT no debe producir pagos. Contrastar con `pos_desktop/nfc.py` y productores/consumidores antes de cambiar APDU o campos firmados.
 - Preservar payloads originales, unidades en centavos, firmas y digests. No reconstruir evidencia histórica para hacerla compatible.
@@ -83,3 +83,10 @@ de código de forma incidental. Sin pruebas, compilación, instalación ni push.
 - El cierre primero persiste manifiesto y payload firmable; un reinicio reutiliza el mismo cierre. Los pagos pendientes siguen respaldados y sus índices no se rehabilitan.
 - Estados financieros v3 requieren y persisten una resolución firmada. V2 conserva recuperación histórica.
 - Compilación APK e instrumentadas aprobada; instrumentadas no ejecutadas. Migraciones, pruebas y comportamiento en móviles continúan pendientes.
+
+## Recuperación C12 — 20/10/2026
+
+- Room 18 añade evidencia de resolución final para comercio móvil y estado de recuperación para ambos roles. La consulta histórica por GET v3 adjunta bytes firmados a finales existentes sin repetir efectos contables.
+- La renovación explícita puede cerrar una autorización vencida o agotada; el trabajo automático conserva el criterio de vencimiento. Un ID de solicitud guardado antes de Room 17 se recupera sin generar otro al iniciar sesión con historial.
+- Solicitudes nuevas vencidas siguen rechazadas; una solicitud exacta de la cuenta activa con comprobante ya persistido puede reanudar la entrega del acuse sin consumir otro índice.
+- No desinstalar, borrar datos ni instalar un APK anterior para resolver errores de migración. Room 17→18 es aditiva, pero no fue ejecutada sobre bases de usuario durante esta implementación.

@@ -24,13 +24,21 @@ class MobilePosSyncRepository(
         val instant = now().epochSecond
         val dao = database.mobilePosOperationDao()
         val candidates = dao.getSyncCandidates(terminalId, instant, limit)
-        if (candidates.isEmpty()) return SyncRun(0, dao.getNextSyncAt(terminalId))
+        if (candidates.isEmpty()) {
+            val recovered = recoverFinalResolutions(terminalId, instant, limit.coerceIn(1, 100))
+            return SyncRun(recovered, listOfNotNull(
+                dao.getNextSyncAt(terminalId), dao.getNextResolutionRecoveryAt(terminalId)
+            ).minOrNull())
+        }
         val response = syncHttp {
             api.syncOfflinePaymentsV3(OfflinePaymentSyncV3Request(candidates.map(::evidence)))
         }
         if (response == null || !response.isSuccessful || response.body() == null) {
             candidates.forEach { scheduleRetry(it, "NETWORK_OR_HTTP_ERROR", instant) }
-            return SyncRun(0, dao.getNextSyncAt(terminalId))
+            val recovered = recoverFinalResolutions(terminalId, instant, limit.coerceIn(1, 100))
+            return SyncRun(recovered, listOfNotNull(
+                dao.getNextSyncAt(terminalId), dao.getNextResolutionRecoveryAt(terminalId)
+            ).minOrNull())
         }
         val candidateIds = candidates.mapTo(mutableSetOf()) { it.operationId }
         val normalized = response.body()!!.results.map { result ->
@@ -47,7 +55,45 @@ class MobilePosSyncRepository(
                 processed++
             }
         }
-        return SyncRun(processed, dao.getNextSyncAt(terminalId))
+        processed += recoverFinalResolutions(terminalId, instant, limit.coerceIn(1, 100))
+        return SyncRun(processed, listOfNotNull(
+            dao.getNextSyncAt(terminalId), dao.getNextResolutionRecoveryAt(terminalId)
+        ).minOrNull())
+    }
+
+    private suspend fun recoverFinalResolutions(terminalId: String, instant: Long, limit: Int): Int {
+        val dao = database.mobilePosOperationDao()
+        var recovered = 0
+        for (operation in dao.getResolutionRecoveryCandidates(terminalId, instant, limit)) {
+            val response = try {
+                api.getOfflinePaymentV3(operation.operationId)
+            } catch (_: java.io.IOException) {
+                null
+            }
+            when {
+                response == null || response.code() >= 500 || response.code() in setOf(408, 429) -> {
+                    val delay = minOf(15L * (1L shl minOf(operation.syncAttempts, 8)), 3600L)
+                    dao.retryResolutionRecovery(operation.operationId, instant + delay)
+                }
+                response.code() in setOf(401, 403) -> throw SyncPauseRequired("REAUTH_REQUIRED")
+                !response.isSuccessful -> dao.flagResolutionRecovery(operation.operationId)
+                else -> {
+                    val result = response.body()
+                    val expected = if (operation.state == "SYNCED") "ACCEPTED" else "REJECTED"
+                    if (result == null || result.operation_id != operation.operationId || !result.final ||
+                        result.operation_status != expected || !verifyResolution(result, operation)) {
+                        dao.flagResolutionRecovery(operation.operationId)
+                    } else {
+                        val wire = Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+                        database.withTransaction {
+                            check(dao.attachFinalResolution(operation.operationId, wire) == 1)
+                        }
+                        recovered++
+                    }
+                }
+            }
+        }
+        return recovered
     }
 
     private suspend fun applyResult(
@@ -57,8 +103,10 @@ class MobilePosSyncRepository(
     ): Boolean {
         val result = initial
         return when (result.status) {
-            "ACCEPTED" -> finish(operation.operationId, "SYNCED", result.code)
-            "REJECTED" -> finish(operation.operationId, "REJECTED", result.code)
+            "ACCEPTED" -> finish(operation.operationId, "SYNCED", result.code,
+                requireNotNull(result.resolutionEnvelope))
+            "REJECTED" -> finish(operation.operationId, "REJECTED", result.code,
+                requireNotNull(result.resolutionEnvelope))
             "CONFLICT" -> finish(operation.operationId, "CONFLICT", result.code)
             "PENDING_EVIDENCE", "RETRYABLE_ERROR" -> {
                 scheduleRetry(operation, result.code ?: result.status, instant)
@@ -71,9 +119,14 @@ class MobilePosSyncRepository(
         }
     }
 
-    private suspend fun finish(operationId: String, state: String, code: String?): Boolean =
+    private suspend fun finish(operationId: String, state: String, code: String?, resolution: ByteArray? = null): Boolean =
         database.withTransaction {
-            check(database.mobilePosOperationDao().finishSync(operationId, state, code) == 1)
+            val updated = if (resolution == null) {
+                database.mobilePosOperationDao().finishSync(operationId, state, code)
+            } else database.mobilePosOperationDao().finishSyncWithResolution(
+                operationId, state, code, resolution
+            )
+            check(updated == 1)
             true
         }
 
@@ -125,6 +178,12 @@ class MobilePosSyncRepository(
         val grant = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.authorizationEnvelope))
         val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(operation.receiptEnvelope))
         require(resolution.payload["operation_id"].asString == operation.operationId)
+        require(resolution.payload["wallet_id"].asString == operation.walletId)
+        require(resolution.payload["merchant_id"].asString == operation.merchantId)
+        require(resolution.payload["terminal_id"].asString == operation.terminalId)
+        require(resolution.payload["amount_cents"].asLong == operation.amountCents)
+        require(resolution.payload["currency"].asString == "ARS")
+        require(resolution.payload["offline_authorization_id"].asString == operation.authorizationId)
         require(resolution.payload["request_digest"].asString == ProtocolV3.payloadDigest(request))
         require(resolution.payload["authorization_digest"].asString == ProtocolV3.payloadDigest(grant))
         require(resolution.payload["receipt_digest"].asString == ProtocolV3.payloadDigest(receipt))

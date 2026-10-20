@@ -14,7 +14,7 @@ import com.example.prototipopagosoffline.utils.TokenManager
 import java.util.concurrent.TimeUnit
 
 object SyncManager {
-    fun enqueueSync(context: Context, delaySeconds: Long = 0) {
+    fun enqueueSync(context: Context, delaySeconds: Long = 0, retryEvidenceAttention: Boolean = false) {
         val session = TokenManager(context.applicationContext)
         val role = session.getRole() ?: return
         val accountId = when (role) {
@@ -22,14 +22,15 @@ object SyncManager {
             "comercio" -> session.getTerminalId()
             else -> null
         } ?: return
-        enqueueAccount(context, role, accountId, delaySeconds)
+        enqueueAccount(context, role, accountId, delaySeconds, retryEvidenceAttention = retryEvidenceAttention)
     }
 
     private fun constraints() = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     internal fun enqueueAccount(context: Context, role: String, accountId: String,
-                                delaySeconds: Long = 0, retryAttempt: Int = 0) {
+                                delaySeconds: Long = 0, retryAttempt: Int = 0,
+                                retryEvidenceAttention: Boolean = false) {
         if (delaySeconds > 0) {
             scheduleWake(context, role, accountId, delaySeconds, retryAttempt)
             return
@@ -38,7 +39,8 @@ object SyncManager {
         val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(constraints())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
-            .setInputData(workDataOf("role" to role, "account_id" to accountId, "retry_attempt" to retryAttempt))
+            .setInputData(workDataOf("role" to role, "account_id" to accountId,
+                "retry_attempt" to retryAttempt, "retry_evidence_attention" to retryEvidenceAttention))
             .build()
 
         WorkManager.getInstance(context.applicationContext)

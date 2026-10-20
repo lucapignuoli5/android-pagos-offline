@@ -27,5 +27,7 @@ data class MobilePosOperation(
     @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long,
     @ColumnInfo(name = "sync_attempts", defaultValue = "0") val syncAttempts: Int = 0,
     @ColumnInfo(name = "next_sync_at_epoch_seconds") val nextSyncAtEpochSeconds: Long? = null,
-    @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null
+    @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null,
+    @ColumnInfo(name = "resolution_envelope", typeAffinity = ColumnInfo.BLOB) val resolutionEnvelope: ByteArray? = null,
+    @ColumnInfo(name = "resolution_recovery_status", defaultValue = "'PENDING'") val resolutionRecoveryStatus: String = "PENDING"
 )

@@ -42,6 +42,11 @@ interface ApiService {
         @Body request: OfflinePaymentSyncV3Request
     ): Response<OfflinePaymentSyncV3Response>
 
+    @GET("/api/v3/offline-payments/{operationId}")
+    suspend fun getOfflinePaymentV3(
+        @Path("operationId") operationId: String
+    ): Response<OfflinePaymentResultV3>
+
     @POST("/api/v3/legacy-inventory")
     suspend fun registerLegacyInventory(
         @Body request: LegacyInventoryRequest

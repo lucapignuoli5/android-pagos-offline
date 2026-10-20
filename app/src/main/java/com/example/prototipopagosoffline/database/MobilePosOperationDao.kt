@@ -34,4 +34,25 @@ interface MobilePosOperationDao {
 
     @Query("UPDATE mobile_pos_operations SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state = 'LOCALLY_ACCEPTED'")
     suspend fun finishSync(operationId: String, state: String, code: String?): Int
+
+    @Query("UPDATE mobile_pos_operations SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code, resolution_envelope = :resolution, resolution_recovery_status = 'COMPLETE' WHERE operation_id = :operationId AND state = 'LOCALLY_ACCEPTED' AND (resolution_envelope IS NULL OR resolution_envelope = :resolution)")
+    suspend fun finishSyncWithResolution(operationId: String, state: String, code: String?, resolution: ByteArray): Int
+
+    @Query("SELECT * FROM mobile_pos_operations WHERE terminal_id = :terminalId AND state IN ('SYNCED','REJECTED') AND receipt_envelope IS NOT NULL AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING' AND (next_sync_at_epoch_seconds IS NULL OR next_sync_at_epoch_seconds <= :now) ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
+    suspend fun getResolutionRecoveryCandidates(terminalId: String, now: Long, limit: Int): List<MobilePosOperation>
+
+    @Query("SELECT MIN(COALESCE(next_sync_at_epoch_seconds, 0)) FROM mobile_pos_operations WHERE terminal_id = :terminalId AND state IN ('SYNCED','REJECTED') AND receipt_envelope IS NOT NULL AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING'")
+    suspend fun getNextResolutionRecoveryAt(terminalId: String): Long?
+
+    @Query("UPDATE mobile_pos_operations SET resolution_envelope = :resolution, resolution_recovery_status = 'COMPLETE', next_sync_at_epoch_seconds = NULL WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING'")
+    suspend fun attachFinalResolution(operationId: String, resolution: ByteArray): Int
+
+    @Query("UPDATE mobile_pos_operations SET sync_attempts = sync_attempts + 1, next_sync_at_epoch_seconds = :nextAttempt WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING'")
+    suspend fun retryResolutionRecovery(operationId: String, nextAttempt: Long): Int
+
+    @Query("UPDATE mobile_pos_operations SET resolution_recovery_status = 'ATTENTION_REQUIRED', next_sync_at_epoch_seconds = NULL WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL")
+    suspend fun flagResolutionRecovery(operationId: String): Int
+
+    @Query("UPDATE mobile_pos_operations SET resolution_recovery_status = 'PENDING' WHERE terminal_id = :terminalId AND resolution_recovery_status = 'ATTENTION_REQUIRED' AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL")
+    suspend fun retryAttentionResolutionRecovery(terminalId: String): Int
 }

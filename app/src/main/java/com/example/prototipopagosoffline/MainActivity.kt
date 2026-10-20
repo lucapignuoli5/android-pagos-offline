@@ -394,7 +394,8 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 CleanActionButton(icon = Icons.Default.Sync, label = "Actualizar", onClick = {
-                    com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                    com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(
+                        context, retryEvidenceAttention = true)
                     scope.launch(Dispatchers.IO) {
                         try {
                             val currentWalletId = walletId ?: error("Billetera no configurada")
@@ -581,7 +582,8 @@ fun HomeScreen(
                         icon = Icons.Default.Sync,
                         label = "Sincronizar",
                         onClick = {
-                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(
+                                context, retryEvidenceAttention = true)
                             Toast.makeText(context, "Sincronización programada", Toast.LENGTH_SHORT).show()
                         }
                     )

@@ -55,8 +55,26 @@ interface NfcExchangeDao {
     @Query("UPDATE nfc_exchanges SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
     suspend fun finishSync(operationId: String, state: String, code: String?): Int
 
-    @Query("UPDATE nfc_exchanges SET state = :state, resolution_envelope = :resolution, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED') AND (resolution_envelope IS NULL OR resolution_envelope = :resolution)")
+    @Query("UPDATE nfc_exchanges SET state = :state, resolution_envelope = :resolution, resolution_recovery_status = 'COMPLETE', next_sync_at_epoch_seconds = NULL, last_sync_code = :code, server_evidence_stored = 1 WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED') AND (resolution_envelope IS NULL OR resolution_envelope = :resolution)")
     suspend fun finishSyncWithResolution(operationId: String, state: String, code: String?, resolution: ByteArray): Int
+
+    @Query("SELECT * FROM nfc_exchanges WHERE wallet_id = :walletId AND state IN ('SYNCED','REJECTED') AND receipt_envelope IS NOT NULL AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING' AND authorization_id IN (SELECT id FROM local_offline_authorizations WHERE authorization_envelope IS NOT NULL) AND (next_sync_at_epoch_seconds IS NULL OR next_sync_at_epoch_seconds <= :now) ORDER BY created_at_epoch_seconds ASC LIMIT :limit")
+    suspend fun getResolutionRecoveryCandidates(walletId: String, now: Long, limit: Int): List<NfcExchange>
+
+    @Query("SELECT MIN(COALESCE(next_sync_at_epoch_seconds, 0)) FROM nfc_exchanges WHERE wallet_id = :walletId AND state IN ('SYNCED','REJECTED') AND receipt_envelope IS NOT NULL AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING' AND authorization_id IN (SELECT id FROM local_offline_authorizations WHERE authorization_envelope IS NOT NULL)")
+    suspend fun getNextResolutionRecoveryAt(walletId: String): Long?
+
+    @Query("UPDATE nfc_exchanges SET resolution_envelope = :resolution, resolution_recovery_status = 'COMPLETE', next_sync_at_epoch_seconds = NULL, server_evidence_stored = 1 WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING'")
+    suspend fun attachFinalResolution(operationId: String, resolution: ByteArray): Int
+
+    @Query("UPDATE nfc_exchanges SET sync_attempts = sync_attempts + 1, next_sync_at_epoch_seconds = :nextAttempt WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL AND resolution_recovery_status = 'PENDING'")
+    suspend fun retryResolutionRecovery(operationId: String, nextAttempt: Long): Int
+
+    @Query("UPDATE nfc_exchanges SET resolution_recovery_status = 'ATTENTION_REQUIRED', next_sync_at_epoch_seconds = NULL WHERE operation_id = :operationId AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL")
+    suspend fun flagResolutionRecovery(operationId: String): Int
+
+    @Query("UPDATE nfc_exchanges SET resolution_recovery_status = 'PENDING' WHERE wallet_id = :walletId AND resolution_recovery_status = 'ATTENTION_REQUIRED' AND state IN ('SYNCED','REJECTED') AND resolution_envelope IS NULL")
+    suspend fun retryAttentionResolutionRecovery(walletId: String): Int
 
     @Query("SELECT * FROM nfc_exchanges WHERE authorization_id = :authorizationId AND receipt_envelope IS NOT NULL ORDER BY created_at_epoch_seconds ASC")
     suspend fun getByAuthorization(authorizationId: String): List<NfcExchange>

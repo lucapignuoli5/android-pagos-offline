@@ -38,6 +38,12 @@ class SyncWorker(
                 return Result.success(workDataOf("sync_status" to reason))
             }
             val api = RetrofitClient.authenticatedApi(token)
+            if (inputData.getBoolean("retry_evidence_attention", false)) {
+                if (role == "cliente") database.nfcExchangeDao()
+                    .retryAttentionResolutionRecovery(accountId)
+                else database.mobilePosOperationDao()
+                    .retryAttentionResolutionRecovery(accountId)
+            }
             Log.i("PaymentSync", "STARTED role=$role")
             val run = when (role) {
                 "cliente" -> {
