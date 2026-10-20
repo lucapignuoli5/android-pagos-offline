@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
@@ -18,6 +19,9 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transaction_history WHERE wallet_id = :walletId ORDER BY timestamp DESC")
     suspend fun getTransactionsForWallet(walletId: String): List<TransactionHistory>
+
+    @Query("SELECT * FROM transaction_history WHERE wallet_id = :walletId ORDER BY timestamp DESC LIMIT 100")
+    fun observeTransactionsForWallet(walletId: String): Flow<List<TransactionHistory>>
 
     @Query("SELECT * FROM transaction_history WHERE wallet_id IS NULL ORDER BY timestamp DESC")
     suspend fun getUnownedLegacyTransactions(): List<TransactionHistory>

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MobilePosOperationDao {
@@ -12,6 +13,9 @@ interface MobilePosOperationDao {
 
     @Query("SELECT * FROM mobile_pos_operations WHERE operation_id = :operationId LIMIT 1")
     suspend fun get(operationId: String): MobilePosOperation?
+
+    @Query("SELECT * FROM mobile_pos_operations WHERE terminal_id = :terminalId AND merchant_id = :merchantId AND receipt_envelope IS NOT NULL ORDER BY created_at_epoch_seconds DESC LIMIT :limit")
+    fun observePaymentHistory(terminalId: String, merchantId: String, limit: Int = 100): Flow<List<MobilePosOperation>>
 
     @Query("UPDATE mobile_pos_operations SET authorization_envelope = :authorization, receipt_envelope = :receipt, ack_envelope = :ack, wallet_id = :walletId, authorization_id = :authorizationId, state = 'LOCALLY_ACCEPTED', next_sync_at_epoch_seconds = NULL, last_sync_code = NULL WHERE operation_id = :operationId AND state = 'REQUEST_CREATED' AND receipt_envelope IS NULL AND ack_envelope IS NULL")
     suspend fun accept(

@@ -683,3 +683,14 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Límites: requiere sesión e Internet/servidor; callback, trabajo durable y recuperación periódica están sujetos a demoras Android. Vencimientos y diez pagos conservan límites; no se promete renovación instantánea ni prevención total de doble gasto.
 - Impacto académico: sustituye la interacción explícita C10–C12 por mantenimiento transparente; evidencia funcional de esta versión queda pendiente.
 - Commit: `feat(sync): [TFG-C13-AN-02] renovar autorizaciones sin intervención manual`.
+
+## TFG-C13-AN-03 — Actividad reciente persistida por cuenta
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo manual: actividad no accesible ni visible en cliente/comercio; menú aún consulta estado volátil heredado.
+- Alcance: conectar actividad a operaciones persistidas de la cuenta/terminal y permitir su consulta; separar aceptación local y conciliación.
+- Antes/ahora: lista global cargada una vez, sin cobros mobile_pos_operations y menú sin scroll. Ahora Flow por billetera o comercio/terminal verificado actualiza vista previa y pantalla Actividad con hasta 100 pagos/cobros locales, fecha, importe, estado y detalle. Se deduplica por operación con prioridad moderna; históricos sin dueño no se muestran como personales. Hay reintento contextual de prueba final que requiere atención.
+- Archivos: `MainActivity.kt`, `ui/screens/PaymentHistoryScreen.kt`, `database/NfcExchangeDao.kt`, `database/MobilePosOperationDao.kt`, `database/TransactionDao.kt`, este registro. Solo consultas/representación; Room sigue en 18 sin migración nueva. No calcula saldo sumando cobros pendientes.
+- Verificación: revisión estática de filtros/cuenta y compilación APK e instrumentadas correctas; sin ejecución de pruebas ni instalación.
+- Límites: pagos guardados en este teléfono; no descarga historial de otros dispositivos ni atribuye registros sin dueño. Pantallas pequeñas, detalle, cambio de cuenta y actualización en vivo pendientes de validación manual.
+- Impacto académico: visibilidad de estados persistidos y separación aceptación/conciliación, sin alterar datos históricos ni Entrega 4.
+- Commit: `fix(historial): [TFG-C13-AN-03] consultar movimientos persistidos por cuenta`.

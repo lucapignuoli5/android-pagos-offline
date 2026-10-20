@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,10 +68,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.prototipopagosoffline.database.AppDatabase
-import com.example.prototipopagosoffline.database.TransactionHistory
 import com.example.prototipopagosoffline.network.RetrofitClient
 import com.example.prototipopagosoffline.ui.screens.CobroQrScreen
 import com.example.prototipopagosoffline.ui.screens.PagarQrScreen
+import com.example.prototipopagosoffline.ui.screens.PaymentHistoryScreen
+import com.example.prototipopagosoffline.ui.screens.PaymentActivityRow
+import com.example.prototipopagosoffline.ui.screens.rememberPaymentHistory
 import com.example.prototipopagosoffline.ui.theme.PrototipoPagosOfflineTheme
 import com.example.prototipopagosoffline.utils.TokenManager
 import com.google.gson.Gson
@@ -78,7 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class UserRole { CLIENTE, COMERCIO, NONE }
-enum class AppScreen { ROLE_SELECTION, HOME, CLIENT, POS, COBRO_QR, PAGO_QR }
+enum class AppScreen { ROLE_SELECTION, HOME, CLIENT, POS, COBRO_QR, PAGO_QR, HISTORY }
 
 class MainActivity : AppCompatActivity() {
     override fun onStart() {
@@ -159,6 +163,7 @@ class MainActivity : AppCompatActivity() {
                                 onPosClick = { currentScreen = AppScreen.POS },
                                 onCobroQrClick = { currentScreen = AppScreen.COBRO_QR },
                                 onPagarQrClick = { currentScreen = AppScreen.PAGO_QR },
+                                onHistoryClick = { currentScreen = AppScreen.HISTORY },
                                 modifier = modifier
                             )
                             AppScreen.CLIENT -> ClientScreen(
@@ -178,6 +183,11 @@ class MainActivity : AppCompatActivity() {
                                 onBack = { currentScreen = AppScreen.HOME },
                                 modifier = modifier
                             )
+                            AppScreen.HISTORY -> PaymentHistoryScreen(
+                                isMerchant = currentRole == UserRole.COMERCIO,
+                                onBack = { currentScreen = AppScreen.HOME },
+                                modifier = modifier
+                            )
                         }
                     }
                 }
@@ -194,6 +204,7 @@ fun HomeScreen(
     onPosClick: () -> Unit,
     onCobroQrClick: () -> Unit,
     onPagarQrClick: () -> Unit,
+    onHistoryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -228,46 +239,7 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val db = AppDatabase.getInstance(context)
-            val dbTransactions = walletId
-                ?.let { db.transactionDao().getTransactionsForWallet(it).take(10) }
-                .orEmpty()
-            val v3Transactions = walletId
-                ?.let { id -> db.nfcExchangeDao().getHistoryForWallet(id, 10) }
-                .orEmpty()
-                .filter { it.receiptEnvelope != null && it.amountCents != null }
-                .map { exchange ->
-                    com.example.prototipopagosoffline.database.TransactionHistory(
-                        idTransaccion = exchange.operationId,
-                        monto = requireNotNull(exchange.amountCents),
-                        timestamp = java.time.Instant.ofEpochSecond(exchange.createdAtEpochSeconds).toString(),
-                        comercioId = 0,
-                        tokenId = requireNotNull(exchange.walletId),
-                        firma = "",
-                        payloadOriginal = "",
-                        clavePublica = "",
-                        isOutgoing = true,
-                        walletId = exchange.walletId,
-                        estadoSincronizacion = if (exchange.state == "SYNCED") {
-                            com.example.prototipopagosoffline.database.SyncState.SYNCED
-                        } else {
-                            com.example.prototipopagosoffline.database.SyncState.PENDING
-                        }
-                    )
-                }
-            val recent = (v3Transactions + dbTransactions)
-                .distinctBy { it.idTransaccion }
-                .sortedByDescending { it.timestamp }
-                .take(10)
-            withContext(Dispatchers.Main) {
-                if (PaymentState.recentTransactions.isEmpty()) {
-                    PaymentState.recentTransactions.addAll(recent)
-                }
-            }
-        }
-    }
+    val recentActivity = rememberPaymentHistory(role == UserRole.COMERCIO)
 
     LaunchedEffect(walletId) {
         if (walletId != null) {
@@ -281,6 +253,7 @@ fun HomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
         if (syncPauseReason != null) {
@@ -508,23 +481,18 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Activity List
-        Text(
-            text = "Actividad Reciente",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Actividad reciente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            androidx.compose.material3.TextButton(onClick = onHistoryClick) { Text("Ver actividad") }
+        }
         Spacer(modifier = Modifier.height(16.dp))
-        
-        if (PaymentState.recentTransactions.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                Text("No hay transacciones recientes", color = MaterialTheme.colorScheme.secondary)
-            }
+        if (recentActivity.isEmpty()) {
+            Text("Todavía no hay movimientos para esta cuenta.", color = MaterialTheme.colorScheme.secondary)
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(PaymentState.recentTransactions) { tx ->
-                    ActivityItem(tx)
-                }
+            recentActivity.take(5).forEach { item ->
+                PaymentActivityRow(item, onClick = onHistoryClick)
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
@@ -576,52 +544,6 @@ fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(text = label, style = MaterialTheme.typography.labelLarge)
-    }
-}
-
-@Composable
-fun ActivityItem(transaction: TransactionHistory) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (transaction.isOutgoing) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
-                contentDescription = null,
-                tint = if (transaction.isOutgoing) Color.Red else Color.Green,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (transaction.isOutgoing) "Pago Enviado" else "Pago Recibido",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "ID: ${transaction.idTransaccion}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
-        }
-        Text(
-            text = "${if (transaction.isOutgoing) "-" else "+"}$${String.format(java.util.Locale.US, "%.2f", transaction.monto / 100.0)}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (transaction.isOutgoing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-        )
     }
 }
 
