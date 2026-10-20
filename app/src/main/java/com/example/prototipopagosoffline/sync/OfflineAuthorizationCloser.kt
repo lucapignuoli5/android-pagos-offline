@@ -22,7 +22,15 @@ class OfflineAuthorizationCloser(
     private val now: () -> Instant = { Instant.now() }
 ) {
     suspend fun closeExpired(walletId: String) {
-        for (authorization in database.authorizationDao().getClosable(walletId, now().epochSecond)) {
+        close(database.authorizationDao().getClosable(walletId, now().epochSecond))
+    }
+
+    suspend fun closeExpiredOrExhausted(walletId: String) {
+        close(database.authorizationDao().getExplicitlyClosable(walletId, now().epochSecond))
+    }
+
+    private suspend fun close(authorizations: List<LocalOfflineAuthorization>) {
+        for (authorization in authorizations) {
             val prepared = if (authorization.closureState == "READY") authorization else prepare(authorization) ?: continue
             val closure = prepared.closureEnvelope ?: continue
             val manifest = prepared.closureManifest ?: continue

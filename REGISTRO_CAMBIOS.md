@@ -627,3 +627,11 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Commit: `fix(nfc): [TFG-C12-AN-03] reanudar acuses de solicitudes conocidas`.
 - Antes: vencimiento bloqueaba reanudación aunque ya hubiera comprobante. Ahora: solo solicitud idéntica firmada de cuenta activa y comprobante guardado atraviesa esa barrera; se devuelve estado persistido. Confirmar consulta la cuenta antes de devolver comprobante existente.
 - Archivos: `protocol/ClientPaymentExchangeService.kt`, `protocol/RoomNfcExchangeStore.kt`, `utils/OfflinePaymentCoordinator.kt`, este registro. NFC y QR/TCP usan el mismo servicio; no se alteran APDU ni firma. Verificación: compilación; pérdida física de acuse pendiente.
+
+## TFG-C12-AN-02 — Cerrar cupos agotados
+- Fecha: 2026-10-20. Estado: IMPLEMENTADA / VALIDACIÓN MANUAL PENDIENTE.
+- Hallazgo: diez pagos pequeños podían bloquear fondos sin emitir hasta el vencimiento de 24 horas.
+- Alcance: cierre explícito anticipado, sin liberar comprobantes pendientes.
+- Commit: `fix(cupo): [TFG-C12-AN-02] cerrar autorizaciones agotadas`.
+- Antes: solo se cerraba al vencer. Ahora: la acción explícita «Cupo» incluye autorizaciones sin índices o importe disponible, sincroniza comprobantes y reutiliza el manifiesto congelado; WorkManager sigue cerrando solo por vencimiento.
+- Archivos: `database/AuthorizationDao.kt`, `sync/OfflineAuthorizationCloser.kt`, `utils/OfflineProvisioner.kt`, este registro. Sin cambio de base ni sobre firmado. Verificación: compilación; pendiente diez pagos pequeños y reserva sin acuse.

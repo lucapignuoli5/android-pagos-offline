@@ -13,6 +13,9 @@ interface AuthorizationDao {
     @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL AND expires_at_epoch_seconds <= :now AND closure_state IN ('OPEN','FROZEN','READY') ORDER BY expires_at_epoch_seconds ASC")
     suspend fun getExpiredForRecovery(walletId: String, now: Long): List<LocalOfflineAuthorization>
 
+    @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL AND (expires_at_epoch_seconds <= :now OR remaining_payments <= 0 OR remaining_amount_cents <= 0) AND closure_state IN ('OPEN','FROZEN','READY') ORDER BY expires_at_epoch_seconds ASC")
+    suspend fun getExplicitlyClosable(walletId: String, now: Long): List<LocalOfflineAuthorization>
+
     @Query("SELECT EXISTS(SELECT 1 FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL)")
     suspend fun hasV3AuthorizationHistory(walletId: String): Boolean
 

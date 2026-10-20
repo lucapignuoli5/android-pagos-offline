@@ -40,13 +40,13 @@ class OfflineProvisioner(
 
     suspend fun renew(login: LoginResponse) = AccountOperationLocks.withLock("cliente", login.wallet_id) {
         val nowSeconds = now().epochSecond
-        val expired = database.authorizationDao().getExpiredForRecovery(login.wallet_id, nowSeconds)
-        expired.forEach { authorization ->
+        val closable = database.authorizationDao().getExplicitlyClosable(login.wallet_id, nowSeconds)
+        closable.forEach { authorization ->
             V2SyncRepository(database, api, now).syncAuthorization(authorization.id)
         }
-        OfflineAuthorizationCloser(database, api, now = now).closeExpired(login.wallet_id)
-        check(database.authorizationDao().getExpiredForRecovery(login.wallet_id, now().epochSecond).isEmpty()) {
-            "Hay una autorizacion vencida que requiere recuperar o revisar sus comprobantes"
+        OfflineAuthorizationCloser(database, api, now = now).closeExpiredOrExhausted(login.wallet_id)
+        check(database.authorizationDao().getExplicitlyClosable(login.wallet_id, now().epochSecond).isEmpty()) {
+            "Hay una autorizacion vencida o agotada que requiere recuperar o revisar sus comprobantes"
         }
         provisionLocked(login, allowIssuance = true, initialOnly = false)
     }
