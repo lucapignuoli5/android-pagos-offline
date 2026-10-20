@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NfcExchangeDao {
+    @Query("UPDATE nfc_exchanges SET server_evidence_stored = 1 WHERE operation_id = :operationId AND receipt_envelope IS NOT NULL")
+    suspend fun markServerEvidenceStored(operationId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertExchange(exchange: NfcExchange): Long
 
@@ -51,6 +54,9 @@ interface NfcExchangeDao {
 
     @Query("UPDATE nfc_exchanges SET state = :state, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED')")
     suspend fun finishSync(operationId: String, state: String, code: String?): Int
+
+    @Query("UPDATE nfc_exchanges SET state = :state, resolution_envelope = :resolution, next_sync_at_epoch_seconds = NULL, last_sync_code = :code WHERE operation_id = :operationId AND state IN ('RESERVED','DELIVERY_UNCERTAIN','LOCALLY_ACCEPTED') AND (resolution_envelope IS NULL OR resolution_envelope = :resolution)")
+    suspend fun finishSyncWithResolution(operationId: String, state: String, code: String?, resolution: ByteArray): Int
 
     @Query("SELECT * FROM nfc_exchanges WHERE authorization_id = :authorizationId AND receipt_envelope IS NOT NULL ORDER BY created_at_epoch_seconds ASC")
     suspend fun getByAuthorization(authorizationId: String): List<NfcExchange>

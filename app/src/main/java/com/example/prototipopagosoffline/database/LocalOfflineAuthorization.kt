@@ -19,6 +19,7 @@ data class LocalOfflineAuthorization(
     @ColumnInfo(name = "next_issuance_index", defaultValue = "1") val nextIssuanceIndex: Int = 1,
     @ColumnInfo(name = "closure_envelope", typeAffinity = ColumnInfo.BLOB) val closureEnvelope: ByteArray? = null,
     @ColumnInfo(name = "closure_manifest", typeAffinity = ColumnInfo.BLOB) val closureManifest: ByteArray? = null,
+    @ColumnInfo(name = "closure_payload", typeAffinity = ColumnInfo.BLOB) val closurePayload: ByteArray? = null,
     @ColumnInfo(name = "closure_state", defaultValue = "OPEN") val closureState: String = "OPEN",
     val active: Boolean = true
 )
@@ -32,4 +33,16 @@ data class WalletKeyMetadata(
     val fingerprint: String,
     @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long,
     val retired: Boolean = false
+)
+
+@Entity(tableName = "authorization_issuance_attempts")
+data class AuthorizationIssuanceAttempt(
+    @PrimaryKey @ColumnInfo(name = "wallet_id") val walletId: String,
+    @ColumnInfo(name = "request_id") val requestId: String,
+    @ColumnInfo(name = "wallet_key_id") val walletKeyId: String,
+    @ColumnInfo(name = "max_payment_cents") val maxPaymentCents: Long,
+    @ColumnInfo(name = "max_payments") val maxPayments: Int,
+    val state: String = "PREPARED",
+    @ColumnInfo(name = "last_result_code") val lastResultCode: String? = null,
+    @ColumnInfo(name = "created_at_epoch_seconds") val createdAtEpochSeconds: Long
 )

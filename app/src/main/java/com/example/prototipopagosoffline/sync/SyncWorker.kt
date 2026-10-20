@@ -13,23 +13,16 @@ import androidx.work.workDataOf
 import com.example.prototipopagosoffline.database.OfflineWallet
 import com.example.prototipopagosoffline.network.ApiService
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.ConcurrentHashMap
 
 class SyncWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
-    companion object {
-        private val accountLocks = ConcurrentHashMap<String, Mutex>()
-    }
-
     override suspend fun doWork(): Result {
         val role = inputData.getString("role") ?: return Result.success()
         val accountId = inputData.getString("account_id") ?: return Result.success()
         if (role !in setOf("cliente", "comercio") || accountId.isBlank()) return Result.success()
-        return accountLocks.getOrPut("$role:$accountId") { Mutex() }.withLock {
+        return AccountOperationLocks.withLock(role, accountId) {
             syncAccount(role, accountId)
         }
     }

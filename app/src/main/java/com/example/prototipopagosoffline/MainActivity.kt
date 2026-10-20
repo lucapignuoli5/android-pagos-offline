@@ -104,13 +104,12 @@ class MainActivity : AppCompatActivity() {
                     val savedRole = tokenManager.getRole()
                     val database = AppDatabase.getInstance(context)
 
-                    val hasLocalWallet = savedWalletId?.let {
-                        database.walletDao().getWalletById(it) != null
-                    } == true
                     val hasLocalTerminal = if (savedTerminalId != null && savedUserId != null) {
                         database.mobileTerminalDao().getById(savedTerminalId)?.userId == savedUserId
                     } else false
-                    if (!savedToken.isNullOrEmpty() && savedRole == "cliente" && hasLocalWallet) {
+                    if (!savedToken.isNullOrEmpty() && savedRole == "cliente"
+                        && !savedWalletId.isNullOrBlank() && savedUserId != null
+                    ) {
                         com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                         currentRole = UserRole.CLIENTE
                         currentScreen = AppScreen.HOME
@@ -206,6 +205,7 @@ fun HomeScreen(
     var confirmedBalanceCents by remember { mutableStateOf<Long?>(null) }
     var reservedBalanceCents by remember { mutableStateOf(0L) }
     var syncPauseReason by remember { mutableStateOf<String?>(null) }
+    var preparingAuthorization by remember { mutableStateOf(false) }
 
     LaunchedEffect(role, walletId) {
         TokenManager(context).observeSyncPauseReason().collect { syncPauseReason = it }
@@ -431,6 +431,46 @@ fun HomeScreen(
                 })
                 CleanActionButton(icon = Icons.Default.Nfc, label = "Pagar NFC", onClick = onClientClick)
                 CleanActionButton(icon = Icons.Default.QrCodeScanner, label = "Pagar QR", onClick = onPagarQrClick)
+                CleanActionButton(
+                    icon = Icons.Default.Wallet,
+                    label = if (preparingAuthorization) "Preparando" else "Cupo",
+                    onClick = {
+                        if (!preparingAuthorization) {
+                            preparingAuthorization = true
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                val session = TokenManager(context)
+                                val token = session.getToken() ?: error("Volvé a ingresar para renovar el cupo")
+                                val currentWallet = session.getWalletId() ?: error("Billetera no configurada")
+                                val userId = session.getUserId() ?: error("Sesión incompleta; volvé a ingresar")
+                                val login = com.example.prototipopagosoffline.network.LoginResponse(
+                                    access_token = token,
+                                    token_type = "bearer",
+                                    user_id = userId,
+                                    wallet_id = currentWallet
+                                )
+                                com.example.prototipopagosoffline.utils.OfflineProvisioner(
+                                    AppDatabase.getInstance(context),
+                                    RetrofitClient.authenticatedApi(token),
+                                    requestStore = session
+                                ).renew(login)
+                                    com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "Cupo offline preparado", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, error.message ?: "No se pudo preparar el cupo", Toast.LENGTH_LONG).show()
+                                    }
+                                } finally {
+                                    withContext(Dispatchers.Main) { preparingAuthorization = false }
+                                }
+                            }
+                        }
+                    }
+                )
                 CleanActionButton(
                     icon = Icons.Default.Refresh,
                     label = "Cargar",
@@ -831,25 +871,26 @@ fun RoleSelectionScreen(onRoleSelected: (UserRole) -> Unit, modifier: Modifier =
                         if (response.isSuccessful && response.body() != null) {
                             val login = response.body()!!
                             val tokenManager = com.example.prototipopagosoffline.utils.TokenManager(context)
-                            tokenManager.saveToken(login.access_token)
+                            check(tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)) {
+                                "No se pudo guardar la sesion"
+                            }
+                            var provisioningError: String? = null
                             try {
                                 com.example.prototipopagosoffline.utils.OfflineProvisioner(
                                     AppDatabase.getInstance(context),
-                                    com.example.prototipopagosoffline.network.RetrofitClient.apiService,
+                                    com.example.prototipopagosoffline.network.RetrofitClient.authenticatedApi(login.access_token),
                                     requestStore = tokenManager
                                 ).provision(login)
-                                check(tokenManager.saveSession(login.access_token, login.wallet_id, login.user_id)) {
-                                    "No se pudo guardar la sesion"
-                                }
-                                com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
                             } catch (error: Exception) {
-                                tokenManager.clearToken()
-                                throw error
+                                provisioningError = error.message
                             }
+                            com.example.prototipopagosoffline.sync.SyncManager.enqueueSync(context)
 
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 isLoading = false
-                                android.widget.Toast.makeText(context, "Login Exitoso", android.widget.Toast.LENGTH_SHORT).show()
+                                val message = if (provisioningError == null) "Login exitoso"
+                                else "Sesión iniciada; el cupo queda pendiente: $provisioningError"
+                                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                                 onRoleSelected(UserRole.CLIENTE)
                             }
                         } else {

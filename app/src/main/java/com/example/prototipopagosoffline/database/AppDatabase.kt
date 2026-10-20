@@ -15,11 +15,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NfcExchange::class,
         TrustedPublicKey::class,
         LocalOfflineAuthorization::class,
+        AuthorizationIssuanceAttempt::class,
         WalletKeyMetadata::class,
         MobileTerminal::class,
         MobilePosOperation::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -49,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                 .build().also { instance = it }
             }
         }
@@ -147,6 +148,15 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN legacy_inventory_registered INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN server_evidence_stored INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE nfc_exchanges ADD COLUMN resolution_envelope BLOB")
+                db.execSQL("ALTER TABLE local_offline_authorizations ADD COLUMN closure_payload BLOB")
+                db.execSQL("CREATE TABLE IF NOT EXISTS authorization_issuance_attempts (wallet_id TEXT NOT NULL PRIMARY KEY, request_id TEXT NOT NULL, wallet_key_id TEXT NOT NULL, max_payment_cents INTEGER NOT NULL, max_payments INTEGER NOT NULL, state TEXT NOT NULL, last_result_code TEXT, created_at_epoch_seconds INTEGER NOT NULL)")
             }
         }
     }

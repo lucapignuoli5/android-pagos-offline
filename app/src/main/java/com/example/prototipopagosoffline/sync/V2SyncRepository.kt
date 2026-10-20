@@ -28,6 +28,19 @@ class V2SyncRepository(
         require(walletId.isNotBlank())
         val instant = now().epochSecond
         val candidates = database.nfcExchangeDao().getSyncCandidates(walletId, instant, limit)
+        return syncSelected(walletId, candidates, instant)
+    }
+
+    suspend fun syncAuthorization(authorizationId: String): SyncRun {
+        val authorization = database.authorizationDao().getAuthorization(authorizationId)
+            ?: return SyncRun(0, null)
+        val walletId = authorization.walletId
+        val candidates = database.nfcExchangeDao().getByAuthorization(authorizationId)
+            .filter { it.state in setOf("RESERVED", "DELIVERY_UNCERTAIN", "LOCALLY_ACCEPTED") }
+        return syncSelected(walletId, candidates, now().epochSecond)
+    }
+
+    private suspend fun syncSelected(walletId: String, candidates: List<NfcExchange>, instant: Long): SyncRun {
         if (candidates.isEmpty()) return SyncRun(0, database.nfcExchangeDao().getNextSyncAt(walletId))
 
         val v3 = mutableListOf<Pair<NfcExchange, ByteArray>>()
@@ -88,9 +101,21 @@ class V2SyncRepository(
             } else initial
         } else initial
 
+        if (initial.evidenceStored && isV3) {
+            database.nfcExchangeDao().markServerEvidenceStored(exchange.operationId)
+        }
+
         return when (result.status) {
-            "ACCEPTED" -> settleAccepted(exchange, result.code, instant)
-            "REJECTED" -> settleRejected(exchange, result.code)
+            "ACCEPTED" -> when {
+                result.resolutionEnvelope != null -> settleAccepted(exchange, result.code, instant, result.resolutionEnvelope)
+                !isV3 -> settleAcceptedLegacy(exchange, result.code, instant)
+                else -> retryInvalid(exchange, instant)
+            }
+            "REJECTED" -> when {
+                result.resolutionEnvelope != null -> settleRejected(exchange, result.code, result.resolutionEnvelope)
+                !isV3 -> settleRejectedLegacy(exchange, result.code)
+                else -> retryInvalid(exchange, instant)
+            }
             "CONFLICT" -> database.withTransaction {
                 check(database.nfcExchangeDao().finishSync(exchange.operationId, "CONFLICT", result.code) == 1)
                 true
@@ -106,7 +131,23 @@ class V2SyncRepository(
         }
     }
 
-    private suspend fun settleAccepted(exchange: NfcExchange, code: String?, instant: Long): Boolean {
+    private suspend fun settleAccepted(exchange: NfcExchange, code: String?, instant: Long, resolution: ByteArray): Boolean {
+        val walletId = exchange.walletId ?: return retryInvalid(exchange, instant)
+        val amount = exchange.amountCents ?: return retryInvalid(exchange, instant)
+        val balanceResponse = syncHttp { api.getWalletBalance(walletId) }
+        val balance = balanceResponse?.body()
+        if (balanceResponse?.isSuccessful != true || balance == null || balance.wallet_id != walletId) {
+            scheduleRetry(exchange, "BALANCE_REFRESH_REQUIRED", instant)
+            return false
+        }
+        return database.withTransaction {
+            check(database.walletDao().settleAccepted(walletId, amount, balance.confirmed_balance_cents) == 1)
+            check(database.nfcExchangeDao().finishSyncWithResolution(exchange.operationId, "SYNCED", code, resolution) == 1)
+            true
+        }
+    }
+
+    private suspend fun settleAcceptedLegacy(exchange: NfcExchange, code: String?, instant: Long): Boolean {
         val walletId = exchange.walletId ?: return retryInvalid(exchange, instant)
         val amount = exchange.amountCents ?: return retryInvalid(exchange, instant)
         val balanceResponse = syncHttp { api.getWalletBalance(walletId) }
@@ -122,13 +163,25 @@ class V2SyncRepository(
         }
     }
 
-    private suspend fun settleRejected(exchange: NfcExchange, code: String?): Boolean {
+    private suspend fun settleRejected(exchange: NfcExchange, code: String?, resolution: ByteArray): Boolean {
         val walletId = exchange.walletId ?: return retryInvalid(exchange, now().epochSecond)
         val authorizationId = exchange.authorizationId ?: return retryInvalid(exchange, now().epochSecond)
         val amount = exchange.amountCents ?: return retryInvalid(exchange, now().epochSecond)
         return database.withTransaction {
             check(database.walletDao().releaseReservation(walletId, amount) == 1)
             // An issued index is permanent: a rejection releases only its local reservation.
+            check(database.nfcExchangeDao().finishSyncWithResolution(exchange.operationId, "REJECTED", code, resolution) == 1)
+            true
+        }
+    }
+
+    private suspend fun settleRejectedLegacy(exchange: NfcExchange, code: String?): Boolean {
+        val walletId = exchange.walletId ?: return retryInvalid(exchange, now().epochSecond)
+        val authorizationId = exchange.authorizationId ?: return retryInvalid(exchange, now().epochSecond)
+        val amount = exchange.amountCents ?: return retryInvalid(exchange, now().epochSecond)
+        return database.withTransaction {
+            check(database.walletDao().releaseReservation(walletId, amount) == 1)
+            check(database.authorizationDao().restore(authorizationId, amount) == 1)
             check(database.nfcExchangeDao().finishSync(exchange.operationId, "REJECTED", code) == 1)
             true
         }
@@ -181,7 +234,12 @@ class V2SyncRepository(
             else -> "PENDING_EVIDENCE"
         }
         val code = if (result.final && !finalResolutionValid) "INVALID_SIGNED_RESOLUTION" else result.code
-        return OfflinePaymentResultV2(result.operation_id, status, code)
+        val evidenceStored = result.submission_status == "VALIDATED"
+                && result.operation_status in setOf("PENDING_EVIDENCE", "ACCEPTED", "REJECTED")
+        val resolution = if (status in setOf("ACCEPTED", "REJECTED")) {
+            Base64.getDecoder().decode(requireNotNull(result.resolution_envelope_b64))
+        } else null
+        return OfflinePaymentResultV2(result.operation_id, status, code, evidenceStored, resolution)
     }
 
     private fun verifyResolution(result: OfflinePaymentResultV3, exchange: NfcExchange): Boolean = runCatching {

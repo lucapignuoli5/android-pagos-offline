@@ -3,6 +3,7 @@ package com.example.prototipopagosoffline.utils
 import android.content.Context
 import androidx.room.withTransaction
 import com.example.prototipopagosoffline.database.AppDatabase
+import com.example.prototipopagosoffline.database.OfflineWallet
 import com.example.prototipopagosoffline.network.ApiService
 import com.example.prototipopagosoffline.network.SimulatedTopupRequest
 import kotlinx.coroutines.sync.Mutex
@@ -19,6 +20,7 @@ class SimulatedTopupService(context: Context, private val database: AppDatabase,
         val result = requireNotNull(response.body())
         require(result.request_id == requestId && result.wallet_id == walletId && result.amount_cents == 100000L)
         database.withTransaction {
+            database.walletDao().insertWallet(OfflineWallet(walletId, result.confirmed_balance_cents))
             check(database.walletDao().updateConfirmedBalance(walletId, result.confirmed_balance_cents) == 1)
         }
         session.completeRequest("topup100000", walletId)

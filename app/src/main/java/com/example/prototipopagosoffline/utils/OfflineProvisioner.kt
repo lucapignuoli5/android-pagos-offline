@@ -2,6 +2,7 @@ package com.example.prototipopagosoffline.utils
 
 import androidx.room.withTransaction
 import com.example.prototipopagosoffline.database.AppDatabase
+import com.example.prototipopagosoffline.database.AuthorizationIssuanceAttempt
 import com.example.prototipopagosoffline.database.LocalOfflineAuthorization
 import com.example.prototipopagosoffline.database.OfflineWallet
 import com.example.prototipopagosoffline.database.TrustedPublicKey
@@ -13,6 +14,9 @@ import com.example.prototipopagosoffline.network.LoginResponse
 import com.example.prototipopagosoffline.network.OfflineAuthorizationRequest
 import com.example.prototipopagosoffline.protocol.ProtocolV2
 import com.example.prototipopagosoffline.protocol.ProtocolV3
+import com.example.prototipopagosoffline.sync.AccountOperationLocks
+import com.example.prototipopagosoffline.sync.OfflineAuthorizationCloser
+import com.example.prototipopagosoffline.sync.V2SyncRepository
 import com.example.prototipopagosoffline.BuildConfig
 import com.google.gson.JsonObject
 import java.security.MessageDigest
@@ -30,8 +34,33 @@ class OfflineProvisioner(
     private val now: () -> Instant = { Instant.now() },
     private val requestStore: TokenManager? = null
 ) {
-    suspend fun provision(login: LoginResponse) {
+    suspend fun provision(login: LoginResponse) = AccountOperationLocks.withLock("cliente", login.wallet_id) {
+        provisionLocked(login, allowIssuance = true, initialOnly = true)
+    }
+
+    suspend fun renew(login: LoginResponse) = AccountOperationLocks.withLock("cliente", login.wallet_id) {
+        val nowSeconds = now().epochSecond
+        val expired = database.authorizationDao().getExpiredForRecovery(login.wallet_id, nowSeconds)
+        expired.forEach { authorization ->
+            V2SyncRepository(database, api, now).syncAuthorization(authorization.id)
+        }
+        OfflineAuthorizationCloser(database, api, now = now).closeExpired(login.wallet_id)
+        check(database.authorizationDao().getExpiredForRecovery(login.wallet_id, now().epochSecond).isEmpty()) {
+            "Hay una autorizacion vencida que requiere recuperar o revisar sus comprobantes"
+        }
+        provisionLocked(login, allowIssuance = true, initialOnly = false)
+    }
+
+    private suspend fun provisionLocked(login: LoginResponse, allowIssuance: Boolean, initialOnly: Boolean) {
         require(login.wallet_id.isNotBlank())
+        requestStore?.let { session ->
+            require(session.getToken() == login.access_token
+                    && session.getRole() == "cliente"
+                    && session.getWalletId() == login.wallet_id
+                    && session.getUserId() == login.user_id) {
+                "La sesion cambio; volve a ingresar antes de preparar el cupo"
+            }
+        }
         val keyId = "wallet-key:${sha256(login.wallet_id).take(24)}"
         val key = paymentCoordinator.registerWalletKey(login.wallet_id, keyId)
         val proofBytes = buildKeyRegistrationProof(login, key, now(), registrationNonce())
@@ -75,7 +104,15 @@ class OfflineProvisioner(
 
         val currentAuthorization = database.authorizationDao()
             .findActiveForProvisioning(login.wallet_id, key.keyId, now().epochSecond)
-        if (currentAuthorization != null) {
+        val dao = database.authorizationDao()
+        val pendingAttempt = dao.getIssuanceAttempt(login.wallet_id)
+        if (initialOnly && currentAuthorization != null && pendingAttempt == null) {
+            saveWallet(balance.confirmed_balance_cents, login.wallet_id)
+            return
+        }
+        val localHistory = database.authorizationDao().hasV3AuthorizationHistory(login.wallet_id)
+        if (!allowIssuance || (initialOnly && pendingAttempt == null
+                    && (localHistory || balance.has_authorization_history))) {
             saveWallet(balance.confirmed_balance_cents, login.wallet_id)
             return
         }
@@ -83,18 +120,45 @@ class OfflineProvisioner(
         require(BuildConfig.ISSUER_PUBLIC_KEY_B64.isNotBlank() && BuildConfig.ISSUER_KEY_ID.isNotBlank()) {
             "Confianza del emisor v3 no configurada"
         }
-        val authorizationResponse = api.createOfflineAuthorizationV3(
-            OfflineAuthorizationRequest(
-                request_id = requestStore?.pendingRequestId("authorization", login.wallet_id) ?: UUID.nameUUIDFromBytes(
-                    "${login.wallet_id}:${key.keyId}:${now().epochSecond / 86400}".toByteArray(Charsets.UTF_8)
-                ).toString(),
-                wallet_id = login.wallet_id,
-                wallet_key_id = key.keyId,
-                max_payment_cents = ProtocolV2.MAX_AMOUNT_CENTS,
-                max_payments = 10
-            )
+        val attempt = database.withTransaction {
+            val existing = dao.getIssuanceAttempt(login.wallet_id)
+            if (existing != null) {
+                require(existing.walletKeyId == key.keyId
+                        && existing.maxPaymentCents == ProtocolV2.MAX_AMOUNT_CENTS
+                        && existing.maxPayments == 10) {
+                    "Hay una solicitud de autorizacion anterior que requiere recuperacion"
+                }
+                existing
+            } else {
+                val created = AuthorizationIssuanceAttempt(
+                    walletId = login.wallet_id,
+                    requestId = UUID.randomUUID().toString(),
+                    walletKeyId = key.keyId,
+                    maxPaymentCents = ProtocolV2.MAX_AMOUNT_CENTS,
+                    maxPayments = 10,
+                    createdAtEpochSeconds = now().epochSecond
+                )
+                dao.insertIssuanceAttempt(created)
+                created
+            }
+        }
+        val issuanceRequest = OfflineAuthorizationRequest(
+            request_id = attempt.requestId,
+            wallet_id = attempt.walletId,
+            wallet_key_id = attempt.walletKeyId,
+            max_payment_cents = attempt.maxPaymentCents,
+            max_payments = attempt.maxPayments
         )
-        require(authorizationResponse.isSuccessful) { "No se pudo obtener autorizacion offline" }
+        check(dao.markIssuanceSent(login.wallet_id, attempt.requestId) == 1)
+        val authorizationResponse = api.createOfflineAuthorizationV3(issuanceRequest)
+        if (!authorizationResponse.isSuccessful) {
+            dao.recordIssuanceResult(login.wallet_id, attempt.requestId, "HTTP_${authorizationResponse.code()}")
+            error(when (authorizationResponse.code()) {
+                409 -> "No hay cupo libre para una nueva autorizacion; los pagos pendientes siguen reservados"
+                401, 403 -> "La sesion requiere volver a ingresar"
+                else -> "No se pudo obtener autorizacion offline (HTTP ${authorizationResponse.code()})"
+            })
+        }
         val authorization = requireNotNull(authorizationResponse.body()) { "Respuesta de autorizacion vacia" }
         val grantBytes = Base64.getDecoder().decode(authorization.authorization_envelope_b64)
         val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
@@ -105,10 +169,23 @@ class OfflineProvisioner(
         require(payload["wallet_id"].asString == login.wallet_id)
         require(payload["wallet_key_id"].asString == key.keyId)
         require(payload["currency"].asString == ProtocolV3.CURRENCY)
+        require(payload["max_payment_cents"].asLong == attempt.maxPaymentCents)
+        require(payload["max_payments"].asInt == attempt.maxPayments)
+        require(payload["authorized_total_cents"].asLong == authorization.authorized_total_cents)
+        require(authorization.authorized_total_cents in 1..(attempt.maxPaymentCents * attempt.maxPayments))
+        require(payload["wallet_key_fingerprint"].asString == key.fingerprint)
+        require(payload["wallet_public_key_b64"].asString == key.publicKeyBase64)
+        require(Instant.parse(payload["issued_at"].asString).epochSecond == Instant.parse(authorization.issued_at).epochSecond)
+        require(Instant.parse(payload["spend_expires_at"].asString).epochSecond == Instant.parse(authorization.spend_expires_at).epochSecond)
 
         database.withTransaction {
             saveWallet(balance.confirmed_balance_cents, login.wallet_id)
-            database.authorizationDao().upsertAuthorization(
+            val stored = dao.getAuthorization(authorization.authorization_id)
+            if (stored != null) {
+                check(stored.authorizationEnvelope?.contentEquals(grantBytes) == true) {
+                    "La autorizacion recibida no coincide con el registro local"
+                }
+            } else dao.upsertAuthorization(
                 LocalOfflineAuthorization(
                     id = authorization.authorization_id,
                     walletId = authorization.wallet_id,
@@ -121,8 +198,8 @@ class OfflineProvisioner(
                     authorizationEnvelope = grantBytes
                 )
             )
+            check(dao.completeIssuanceAttempt(login.wallet_id, attempt.requestId) == 1)
         }
-        requestStore?.completeRequest("authorization", login.wallet_id)
     }
 
     private suspend fun saveWallet(confirmedBalance: Long, walletId: String) {

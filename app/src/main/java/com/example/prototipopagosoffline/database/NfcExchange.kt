@@ -29,7 +29,9 @@ data class NfcExchange(
     @ColumnInfo(name = "last_sync_code") val lastSyncCode: String? = null,
     @ColumnInfo(name = "request_expires_at_epoch_seconds") val requestExpiresAtEpochSeconds: Long? = null,
     @ColumnInfo(name = "cancelled_at_epoch_seconds") val cancelledAtEpochSeconds: Long? = null,
-    @ColumnInfo(name = "legacy_inventory_registered", defaultValue = "0") val legacyInventoryRegistered: Boolean = false
+    @ColumnInfo(name = "legacy_inventory_registered", defaultValue = "0") val legacyInventoryRegistered: Boolean = false,
+    @ColumnInfo(name = "server_evidence_stored", defaultValue = "0") val serverEvidenceStored: Boolean = false,
+    @ColumnInfo(name = "resolution_envelope", typeAffinity = ColumnInfo.BLOB) val resolutionEnvelope: ByteArray? = null
 )
 
 @Entity(

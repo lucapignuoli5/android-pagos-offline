@@ -9,6 +9,7 @@ import com.example.prototipopagosoffline.protocol.ProtocolV3
 import com.example.prototipopagosoffline.utils.WalletKeyManager
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Base64
@@ -34,51 +35,94 @@ class OfflineAuthorizationCloser(
                     )
                 )
             }
-            if (response?.isSuccessful == true) database.authorizationDao().markClosed(prepared.id)
+            val result = response?.body()
+            if (response?.isSuccessful == true && result?.closed == true
+                && result.authorization_id == prepared.id
+            ) database.authorizationDao().markClosed(prepared.id)
         }
     }
 
     private suspend fun prepare(authorization: LocalOfflineAuthorization): LocalOfflineAuthorization? {
-        val grantBytes = authorization.authorizationEnvelope ?: return null
-        val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
-        val operations = database.nfcExchangeDao().getByAuthorization(authorization.id)
-        if (operations.any { it.state !in setOf("SYNCED", "REJECTED") }) return null
-        val receipts = operations.mapNotNull { it.receiptEnvelope?.let(ProtocolV3::parseSignedEnvelope) }
-            .sortedBy { it.payload["issuance_index"].asInt }
-        if (receipts.map { it.payload["issuance_index"].asInt } != (1..receipts.size).toList()) return null
-        val manifest = JsonArray().apply {
-            receipts.forEach { receipt ->
-                add(JsonObject().apply {
-                    addProperty("issuance_index", receipt.payload["issuance_index"].asInt)
-                    addProperty("operation_id", receipt.payload["operation_id"].asString)
-                    addProperty("amount_cents", receipt.payload["amount_cents"].asLong)
-                    addProperty("receipt_digest", ProtocolV3.payloadDigest(receipt))
-                })
+        val dao = database.authorizationDao()
+        var current = database.withTransaction {
+            val stored = dao.getAuthorization(authorization.id) ?: return@withTransaction null
+            if (stored.closureState == "READY" || stored.closureState == "FROZEN") return@withTransaction stored
+            if (stored.closureState != "OPEN" || !stored.active) return@withTransaction null
+            val grantBytes = stored.authorizationEnvelope ?: return@withTransaction null
+            val grant = ProtocolV3.parseSignedEnvelope(grantBytes)
+            val operations = database.nfcExchangeDao().getByAuthorization(stored.id)
+            if (operations.any {
+                    it.state !in setOf("SYNCED", "RESERVED", "DELIVERY_UNCERTAIN", "LOCALLY_ACCEPTED")
+                            || (!it.serverEvidenceStored && it.state != "SYNCED")
+                }) return@withTransaction null
+            val receipts = operations.map { exchange ->
+                val request = ProtocolV3.parseSignedEnvelope(exchange.requestEnvelope)
+                val receipt = ProtocolV3.parseSignedEnvelope(requireNotNull(exchange.receiptEnvelope))
+                ProtocolV3.validateReceiptBinding(request, receipt, grant)
+                require(receipt.payload["operation_id"].asString == exchange.operationId)
+                require(receipt.payload["wallet_id"].asString == stored.walletId)
+                require(receipt.payload["offline_authorization_id"].asString == stored.id)
+                receipt
+            }.sortedBy { it.payload["issuance_index"].asInt }
+            if (receipts.map { it.payload["issuance_index"].asInt } != (1..receipts.size).toList()) {
+                return@withTransaction null
             }
+            if (receipts.size > grant.payload["max_payments"].asInt) return@withTransaction null
+            val manifest = JsonArray().apply {
+                receipts.forEach { receipt ->
+                    add(JsonObject().apply {
+                        addProperty("issuance_index", receipt.payload["issuance_index"].asInt)
+                        addProperty("operation_id", receipt.payload["operation_id"].asString)
+                        addProperty("amount_cents", receipt.payload["amount_cents"].asLong)
+                        addProperty("receipt_digest", ProtocolV3.payloadDigest(receipt))
+                    })
+                }
+            }
+            val manifestBytes = ProtocolV3.canonicalJson(manifest).toByteArray(Charsets.UTF_8)
+            val metadata = dao.getKeyMetadata(stored.walletId, stored.walletKeyId)
+                ?: return@withTransaction null
+            if (!keyManager.hasKey(metadata.keyStoreAlias)) return@withTransaction null
+            val emittedTotal = receipts.fold(0L) { total, receipt ->
+                Math.addExact(total, receipt.payload["amount_cents"].asLong)
+            }
+            require(emittedTotal <= grant.payload["authorized_total_cents"].asLong)
+            val payload = JsonObject().apply {
+                addProperty("version", ProtocolV3.VERSION)
+                addProperty("type", "offline_authorization_close")
+                addProperty("closure_id", UUID.randomUUID().toString())
+                addProperty("authorization_id", stored.id)
+                addProperty("wallet_id", stored.walletId)
+                addProperty("wallet_key_id", stored.walletKeyId)
+                addProperty("wallet_key_fingerprint", metadata.fingerprint)
+                addProperty("authorization_digest", ProtocolV3.payloadDigest(grant))
+                addProperty("final_issuance_index", receipts.size)
+                addProperty("emitted_total_cents", emittedTotal)
+                addProperty("manifest_digest", ProtocolV3.payloadDigest(manifestBytes))
+                addProperty("issued_at", now().truncatedTo(ChronoUnit.SECONDS).toString())
+            }
+            val payloadBytes = ProtocolV3.canonicalJson(payload).toByteArray(Charsets.UTF_8)
+            check(dao.freezeClosurePayload(stored.id, payloadBytes, manifestBytes) == 1)
+            dao.getAuthorization(stored.id)
+        } ?: return null
+
+        if (current.closureState == "FROZEN") {
+            val payloadBytes = current.closurePayload ?: return null
+            val manifestBytes = current.closureManifest ?: return null
+            val metadata = dao.getKeyMetadata(current.walletId, current.walletKeyId) ?: return null
+            if (!keyManager.hasKey(metadata.keyStoreAlias)) return null
+            val payload = ProtocolV3.parseCanonicalPayload(payloadBytes)
+            val grant = ProtocolV3.parseSignedEnvelope(requireNotNull(current.authorizationEnvelope))
+            val manifest = ProtocolV3.parseCloseManifest(manifestBytes)
+            require(payload["authorization_id"].asString == current.id)
+            require(payload["manifest_digest"].asString == ProtocolV3.payloadDigest(manifestBytes))
+            require(payload["final_issuance_index"].asInt == manifest.size)
+            val closure = ProtocolV3.encodeSignedEnvelope(
+                payload, keyManager.sign(metadata.keyStoreAlias, payloadBytes)
+            )
+            ProtocolV3.validateCloseManifest(ProtocolV3.parseSignedEnvelope(closure), grant, manifestBytes)
+            check(dao.saveClosureEnvelope(current.id, closure) == 1)
+            current = dao.getAuthorization(current.id) ?: return null
         }
-        val manifestBytes = ProtocolV3.canonicalJson(manifest).toByteArray(Charsets.UTF_8)
-        val metadata = database.authorizationDao().getKeyMetadata(authorization.walletId, authorization.walletKeyId)
-            ?: return null
-        if (!keyManager.hasKey(metadata.keyStoreAlias)) return null
-        val payload = JsonObject().apply {
-            addProperty("version", ProtocolV3.VERSION)
-            addProperty("type", "offline_authorization_close")
-            addProperty("closure_id", UUID.randomUUID().toString())
-            addProperty("authorization_id", authorization.id)
-            addProperty("wallet_id", authorization.walletId)
-            addProperty("wallet_key_id", authorization.walletKeyId)
-            addProperty("wallet_key_fingerprint", metadata.fingerprint)
-            addProperty("authorization_digest", ProtocolV3.payloadDigest(grant))
-            addProperty("final_issuance_index", receipts.size)
-            addProperty("emitted_total_cents", receipts.sumOf { it.payload["amount_cents"].asLong })
-            addProperty("manifest_digest", ProtocolV3.payloadDigest(manifestBytes))
-            addProperty("issued_at", now().truncatedTo(ChronoUnit.SECONDS).toString())
-        }
-        val payloadBytes = ProtocolV3.canonicalJson(payload).toByteArray(Charsets.UTF_8)
-        val closure = ProtocolV3.encodeSignedEnvelope(payload, keyManager.sign(metadata.keyStoreAlias, payloadBytes))
-        database.withTransaction {
-            check(database.authorizationDao().freezeClosure(authorization.id, closure, manifestBytes) == 1)
-        }
-        return database.authorizationDao().getAuthorization(authorization.id)
+        return current.takeIf { it.closureState == "READY" }
     }
 }

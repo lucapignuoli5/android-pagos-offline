@@ -76,3 +76,10 @@ El usuario autorizó borrar APK generados, pero la revisión automática rechaz�
 ambos comandos antes de ejecutar. Los cuatro APK Android/demo siguen presentes;
 no afirmar que se borraron ni que se liberó espacio. No ejecutar las propuestas
 de código de forma incidental. Sin pruebas, compilación, instalación ni push.
+
+## Renovación offline C10 — 20/10/2026
+- Room actual pasa a versión 17 con migración aditiva 16→17; conserva autorizaciones, reservas, recibos y claves. La migración agrega reanudación idempotente de solicitudes, cierre congelado y resolución financiera firmada.
+- El inicio de sesión queda disponible si el servidor no emite cupo nuevo. Solo una cuenta sin historial recibe el aprovisionamiento inicial automático; renovaciones posteriores se solicitan desde la acción «Cupo».
+- El cierre primero persiste manifiesto y payload firmable; un reinicio reutiliza el mismo cierre. Los pagos pendientes siguen respaldados y sus índices no se rehabilitan.
+- Estados financieros v3 requieren y persisten una resolución firmada. V2 conserva recuperación histórica.
+- Compilación APK e instrumentadas aprobada; instrumentadas no ejecutadas. Migraciones, pruebas y comportamiento en móviles continúan pendientes.

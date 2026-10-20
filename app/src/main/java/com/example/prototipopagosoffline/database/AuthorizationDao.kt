@@ -10,6 +10,27 @@ interface AuthorizationDao {
     @Query("SELECT * FROM local_offline_authorizations WHERE id = :authorizationId LIMIT 1")
     suspend fun getAuthorization(authorizationId: String): LocalOfflineAuthorization?
 
+    @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL AND expires_at_epoch_seconds <= :now AND closure_state IN ('OPEN','FROZEN','READY') ORDER BY expires_at_epoch_seconds ASC")
+    suspend fun getExpiredForRecovery(walletId: String, now: Long): List<LocalOfflineAuthorization>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL)")
+    suspend fun hasV3AuthorizationHistory(walletId: String): Boolean
+
+    @Query("SELECT * FROM authorization_issuance_attempts WHERE wallet_id = :walletId LIMIT 1")
+    suspend fun getIssuanceAttempt(walletId: String): AuthorizationIssuanceAttempt?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertIssuanceAttempt(attempt: AuthorizationIssuanceAttempt)
+
+    @Query("UPDATE authorization_issuance_attempts SET state = 'SENT', last_result_code = NULL WHERE wallet_id = :walletId AND request_id = :requestId")
+    suspend fun markIssuanceSent(walletId: String, requestId: String): Int
+
+    @Query("UPDATE authorization_issuance_attempts SET last_result_code = :code WHERE wallet_id = :walletId AND request_id = :requestId")
+    suspend fun recordIssuanceResult(walletId: String, requestId: String, code: String?): Int
+
+    @Query("DELETE FROM authorization_issuance_attempts WHERE wallet_id = :walletId AND request_id = :requestId")
+    suspend fun completeIssuanceAttempt(walletId: String, requestId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun upsertAuthorization(authorization: LocalOfflineAuthorization)
 
@@ -22,11 +43,14 @@ interface AuthorizationDao {
     @Query("UPDATE wallet_key_metadata SET retired = 1 WHERE key_id = :keyId AND wallet_id = :walletId")
     suspend fun retireKey(walletId: String, keyId: String): Int
 
-    @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL AND expires_at_epoch_seconds <= :now AND closure_state IN ('OPEN','READY') ORDER BY expires_at_epoch_seconds ASC")
+    @Query("SELECT * FROM local_offline_authorizations WHERE wallet_id = :walletId AND authorization_envelope IS NOT NULL AND expires_at_epoch_seconds <= :now AND closure_state IN ('OPEN','FROZEN','READY') ORDER BY expires_at_epoch_seconds ASC")
     suspend fun getClosable(walletId: String, now: Long): List<LocalOfflineAuthorization>
 
-    @Query("UPDATE local_offline_authorizations SET active = 0, closure_envelope = :closure, closure_manifest = :manifest, closure_state = 'READY' WHERE id = :authorizationId AND closure_state = 'OPEN'")
-    suspend fun freezeClosure(authorizationId: String, closure: ByteArray, manifest: ByteArray): Int
+    @Query("UPDATE local_offline_authorizations SET active = 0, closure_payload = :payload, closure_manifest = :manifest, closure_state = 'FROZEN' WHERE id = :authorizationId AND closure_state = 'OPEN' AND active = 1")
+    suspend fun freezeClosurePayload(authorizationId: String, payload: ByteArray, manifest: ByteArray): Int
+
+    @Query("UPDATE local_offline_authorizations SET closure_envelope = :closure, closure_state = 'READY' WHERE id = :authorizationId AND closure_state = 'FROZEN' AND active = 0")
+    suspend fun saveClosureEnvelope(authorizationId: String, closure: ByteArray): Int
 
     @Query("UPDATE local_offline_authorizations SET closure_state = 'CLOSED' WHERE id = :authorizationId AND closure_state = 'READY'")
     suspend fun markClosed(authorizationId: String): Int

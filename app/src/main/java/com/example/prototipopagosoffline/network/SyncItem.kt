@@ -131,7 +131,13 @@ data class OfflineCommitmentResponse(
     val reserved_cents: Long,
     val emitted_cents: Long,
     val emitted_count: Int,
-    val closed: Boolean
+    val closed: Boolean,
+    val held_cents: Long = 0,
+    val released_unissued_cents: Long = 0,
+    val released_rejected_cents: Long = 0,
+    val phase: String = "OPEN",
+    val closure_id: String? = null,
+    val manifest_digest: String? = null
 )
 
 data class WalletBalanceResponse(
@@ -140,7 +146,8 @@ data class WalletBalanceResponse(
     val confirmed_balance_cents: Long,
     val authorized_offline_cents: Long,
     val available_for_authorization_cents: Long,
-    val review_required: Boolean = false
+    val review_required: Boolean = false,
+    val has_authorization_history: Boolean = false
 )
 
 data class OfflinePaymentEvidence(
@@ -155,7 +162,9 @@ data class OfflinePaymentSyncV2Request(val operations: List<OfflinePaymentEviden
 data class OfflinePaymentResultV2(
     val operation_id: String,
     val status: String,
-    val code: String?
+    val code: String?,
+    val evidenceStored: Boolean = false,
+    val resolutionEnvelope: ByteArray? = null
 )
 
 data class OfflinePaymentSyncV2Response(val results: List<OfflinePaymentResultV2>)

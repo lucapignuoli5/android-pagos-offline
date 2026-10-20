@@ -606,3 +606,16 @@ Este archivo acompaña los cambios del repositorio. Cada entrada identifica el m
 - Resultado: inventario por área y general con tamaños, candidatos y consumidores. Código y scripts solo clasificados. Revisión automática bloqueó borrado de los cuatro APK en dos comandos; todos siguen presentes, sin espacio liberado ni eliminación alternativa.
 - Archivos del commit: INVENTARIO_LIMPIEZA_2026-10-19.md, AGENTS.md y REGISTRO_CAMBIOS.md; informes/registro general y académico fuera de estos repos. Solo documentación; sin pruebas, compilación ni instalación.
 - Asunto exacto: docs(limpieza): [TFG-C8-AN-11] inventariar Android y documentar bloqueo de APK.
+
+## TFG-C10-AN-01 — Acceso separado de la preparación de cupo
+- Fecha: 2026-10-20.
+- Fase: C10 — Recuperación de sesión y preparación explícita.
+- Estado: IMPLEMENTADA / VALIDACIÓN PENDIENTE.
+- Hallazgos: AUD-01, AUD-04, AUD-06, AUD-12.
+- Requisito: conservar sesión válida aunque no haya cupo nuevo; permitir que la renovación se recupere sin duplicar autorizaciones ni perder reservas.
+- Cambio: bootstrap automático solo sin historial; sesión guardada tras login; acción manual Cupo para renovar, recuperar evidencias vencidas y cerrar el manifiesto durable antes de solicitar el saldo libre. El request_id queda persistido para reintentos idénticos. La migración 16→17 agrega reanudación de emisión, payload de cierre, persistencia de evidencia del servidor y resolución firmada. Las resoluciones finales se guardan en la misma transacción que el estado financiero; pagos v3 exigen resolución firmada. V2 mantiene su ruta de recuperación heredada.
+- Archivos: `MainActivity.kt`, `AppDatabase.kt`, `AuthorizationDao.kt`, `LocalOfflineAuthorization.kt`, `NfcExchange.kt`, `NfcExchangeDao.kt`, `SyncItem.kt`, `OfflineAuthorizationCloser.kt`, `SyncWorker.kt`, `V2SyncRepository.kt`, `AccountOperationLocks.kt`, `OfflineProvisioner.kt`, `SimulatedTopupService.kt`, schema 17, `AGENTS.md`, `REGISTRO_CAMBIOS.md`.
+- Verificación: `:app:assembleDebug` y `:app:assembleDebugAndroidTest` terminaron correctamente con JBR 21. La instrumentada solo se compiló, no se ejecutó. No se realizaron tests, lint, instalación, migraciones sobre datos ni pagos.
+- Límites: compilación no acredita migración 16→17, cierre criptográfico, renovación, conciliación física ni preservación de datos en dispositivo. Queda validación manual/agrupada. Warnings Kotlin preexistentes visibles en MainActivity y OfflinePaymentCoordinator.
+- Commit: `fix(android): [TFG-C10-AN-01] separar sesión de renovación offline`.
+- Impacto académico: autenticación no depende de obtener cupo; el usuario puede renovar usando fondos libres y conserva respaldados los pagos emitidos pendientes.
